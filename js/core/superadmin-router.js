@@ -69,8 +69,6 @@ class SuperAdminRouter {
 
   async login(email, password) {
     try {
-      console.log('Super admin login attempt:', email);
-
       const result = await this.centralAuth.signInWithEmailAndPassword(email, password);
       const user = result.user;
 
@@ -90,7 +88,6 @@ class SuperAdminRouter {
   async logout() {
     try {
       await this.centralAuth.signOut();
-      console.log('Super admin logged out');
       window.location.href = '/superadmin/login.html';
     } catch (error) {
       console.error('Logout failed:', error);
