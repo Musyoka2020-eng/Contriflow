@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const startTime = performance.now();
         try {
             const data = await FirebaseManager.loadData();
+            
             appState.contributionsData = data.contributionsData;
             appState.blacklistData = data.blacklistData;
             appState.budgetData = data.budgetData || { expenses: {} };
@@ -67,6 +68,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             FirebaseManager.setLastSyncTime(data.lastSyncTime);
             Utils.updateSyncStatus(data.lastSyncTime);
             
+            // Initialize to valid month and year based on loaded data
+            initializeCurrentMonthAndYear();
             // Hide the loading spinner after data is loaded
             hideLoadingSpinner();
             
@@ -103,7 +106,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (success) {
                     Utils.updateSyncStatus(FirebaseManager.getLastSyncTime());
                     const saveTime = (performance.now() - startTime).toFixed(2);
-                    // Data saved successfully
+                    // Data saved successfully - refresh UI to ensure all views are in sync
+                    try {
+                        updateDisplay();
+                    } catch (err) {
+                        console.error('Error refreshing display after save:', err);
+                    }
                 }
             } catch (error) {
                 console.error('Error saving data:', error);
@@ -130,12 +138,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             appState.budgetData = data.budgetData || { expenses: {} };
             appState.campaignsData = data.campaignsData || {};
             
+            // Refresh year/month selectors with potentially new data
+            Utils.populateYearSelect(dom.yearSelect, appState.currentYear, appState.contributionsData);
+            Utils.populateMonthSelect(dom.monthSelect, appState.currentMonth, appState.contributionsData, appState.currentYear);
+            
             if (data.lastSyncTime) {
                 FirebaseManager.setLastSyncTime(data.lastSyncTime);
                 Utils.updateSyncStatus(data.lastSyncTime);
                 const syncTime = (performance.now() - startTime).toFixed(2);
                 // Data synced successfully
             }
+            
+            // Re-initialize modules and refresh display
+            UIRenderer.init(appState);
+            ViewManager.init(appState);
+            updateDisplay();
         } catch (error) {
             console.error('Error syncing data:', error);
             Swal.fire({
@@ -162,6 +179,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     appState.saveDataCallback = saveData;
     appState.updateDisplayCallback = updateDisplay;
 
+    // Initialize current month and year based on available data
+    function initializeCurrentMonthAndYear() {
+        // Always use the actual current month/year, not the most recent month with data
+        // This allows checkAndCreateCurrentMonth() to work properly
+        appState.currentYear = moment().format('YYYY');
+        appState.currentMonth = moment().format('MMMM');
+    }
+
     // Event handler functions
     const eventHandlers = {
         togglePaymentStatus: EventHandlers.togglePaymentStatus.bind(EventHandlers),
@@ -176,6 +201,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize modules with state
     EventHandlers.init(appState);
     ViewManager.init(appState);
+    UIRenderer.init(appState);
 
     // Event listener setup
     function setupEventListeners() {
@@ -213,8 +239,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             dom.yearSelect.addEventListener('change', () => {
                 const newYear = dom.yearSelect.value; // Keep as string since DB keys are strings
                 appState.currentYear = newYear;
-                appState.currentMonth = dom.monthSelect.value;
-                ViewManager.handlePeriodChange(newYear, appState.currentMonth);
+                
+                // Refresh month selector for the new year
+                // First get the available months for this year
+                const yearData = appState.contributionsData[newYear] || {};
+                const allMonths = moment.months();
+                const monthsInYear = allMonths.filter(month => yearData[month]);
+                
+                // If no months have data in this year, use current month; otherwise use most recent month for this year
+                let newMonth = appState.currentMonth;
+                if (monthsInYear.length > 0) {
+                    if (!monthsInYear.includes(newMonth)) {
+                        // Get the most recent month (highest index)
+                        const monthsWithIndices = monthsInYear.map(month => ({
+                            month,
+                            index: allMonths.indexOf(month)
+                        }));
+                        monthsWithIndices.sort((a, b) => b.index - a.index);
+                        newMonth = monthsWithIndices[0].month;
+                    }
+                }
+                
+                appState.currentMonth = newMonth;
+                // Refresh the month selector to show months for this year
+                Utils.populateMonthSelect(dom.monthSelect, newMonth, appState.contributionsData, newYear);
+                
+                ViewManager.handlePeriodChange(newYear, newMonth);
                 updateDisplay();
             });
         }
@@ -374,6 +424,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Load data from Firebase
         await loadData();
 
+        // Re-initialize modules with updated appState after loading data
+        // (loadData replaces appState.contributionsData, so we need to update module references)
+        UIRenderer.init(appState);
+        ViewManager.init(appState);
+        EventHandlers.init(appState);
+
         // Initialize budget manager for admin users and special giving manager for all users
         const userRole = AuthModule.getUserRole();
         const currentUser = AuthModule.getCurrentUser();
@@ -390,11 +446,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn('Cannot initialize SpecialGivingManager - no user uid available', currentUser);
         }
 
-        // Populate selectors
-        Utils.populateYearSelect(dom.yearSelect, appState.currentYear, appState.contributionsData);
-        Utils.populateMonthSelect(dom.monthSelect, appState.currentMonth);
+        // Populate selectors ONLY if there's actual data
+        if (UIRenderer.hasAnyYears(appState.contributionsData)) {
+            Utils.populateYearSelect(dom.yearSelect, appState.currentYear, appState.contributionsData);
+            Utils.populateMonthSelect(dom.monthSelect, appState.currentMonth, appState.contributionsData, appState.currentYear);
+        } else {
+            // No data - clear selectors and let empty state show
+            dom.yearSelect.innerHTML = '';
+            dom.monthSelect.innerHTML = '';
+        }
 
-        // Check and create current month if needed
+        // Check and create current month if needed (only if data exists)
         const monthCreated = ViewManager.checkAndCreateCurrentMonth();
         if (monthCreated) {
             saveData();

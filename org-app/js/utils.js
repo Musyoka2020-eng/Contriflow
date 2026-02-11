@@ -161,12 +161,37 @@ const Utils = (function() {
             });
         },
 
-        // Populate month select dropdown
-        populateMonthSelect(monthSelect, currentMonth) {
+        // Populate month select dropdown - only with months that have data
+        populateMonthSelect(monthSelect, currentMonth, contributionsData = {}, currentYear = null) {
             monthSelect.innerHTML = '';
-            const months = moment.months();
-
-            for (const month of months) {
+            
+            // Get months with data for current year
+            const allMonths = moment.months();
+            const monthsWithData = [];
+            
+            // If we have a current year, get months that have data in that year
+            if (currentYear && contributionsData[currentYear]) {
+                const yearMonths = contributionsData[currentYear];
+                allMonths.forEach((month, index) => {
+                    if (yearMonths[month]) {
+                        monthsWithData.push({ month, index });
+                    }
+                });
+            }
+            
+            // If no months with data found, show all months (allows selecting a month before adding data)
+            let monoptions = monthsWithData.length > 0 ? monthsWithData : allMonths.map((month, index) => ({ month, index }));
+            
+            // Sort months with most recent first (reverse chronological order)
+            if (Array.isArray(monoptions) && monoptions[0]?.month !== undefined) {
+                monoptions.sort((a, b) => b.index - a.index);
+            } else {
+                monoptions = monoptions.map((month, index) => ({ month, index: allMonths.indexOf(month) }));
+                monoptions.sort((a, b) => b.index - a.index);
+            }
+            
+            monoptions.forEach(item => {
+                const month = item.month || item;
                 const option = document.createElement('option');
                 option.value = month;
                 option.textContent = month;
@@ -176,7 +201,7 @@ const Utils = (function() {
                 }
 
                 monthSelect.appendChild(option);
-            }
+            });
         },
 
         // Format WhatsApp message for monthly report

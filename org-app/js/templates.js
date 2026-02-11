@@ -2,15 +2,175 @@
 // Centralized template strings for UI components
 
 const Templates = {
-    // Special Giving Campaign Templates
-    CAMPAIGN_EMPTY_STATE: `
-        <div class="empty-state">
-            <i class="fas fa-heart"></i>
-            <p>No campaigns yet</p>
-            <p style="font-size: 12px; color: var(--text-secondary);">Create a campaign to start a special giving initiative</p>
+    // Monthly Empty State - When no data exists at all (no months/years created)
+    MONTHLY_EMPTY_STATE: `
+        <style>
+            [data-empty-state-content] h2 { display: block !important; text-align: center; }
+        </style>
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 500px;">
+                <div style="font-size: 80px; color: var(--primary-color); margin-bottom: 20px; opacity: 0.7;">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <h2 style="color: var(--text-primary); margin-bottom: 10px; font-size: 24px;">
+                Welcome to ContriFlow
+                </h2>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 16px; line-height: 1.6;">
+                    No contribution data yet. Get started by creating your first month of contributions.
+                </p>
+                <button id="create-first-month-btn" class="btn btn-primary" style="font-size: 16px; padding: 12px 28px;">
+                    <i class="fas fa-plus-circle"></i> Create First Month
+                </button>
+            </div>
         </div>
     `,
 
+    // Empty Month State - When viewing a specific month with no contributions
+    EMPTY_MONTH_STATE: `
+        <style>
+            [data-empty-month-state] h2 { display: block !important; text-align: center; }
+        </style>
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 50vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 400px;">
+                <div style="font-size: 64px; color: var(--text-secondary); margin-bottom: 20px; opacity: 0.4;">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <h3 style="color: var(--text-primary); margin-bottom: 10px; font-size: 20px; font-weight: 600;">No contributions yet</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+                    This month is empty. Get started by clicking the "Add Contribution" button at the top.
+                </p>
+                <button id="add-contribution-empty-state" class="btn btn-primary" style="font-size: 15px; padding: 11px 26px;">
+                    <i class="fas fa-plus-circle"></i> Add Contribution
+                </button>
+            </div>
+        </div>
+    `,
+
+    // Yearly Empty State - When viewing a specific year with no contributions
+    YEARLY_EMPTY_STATE: `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 50vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 400px;">
+                <div style="font-size: 64px; color: var(--text-secondary); margin-bottom: 20px; opacity: 0.4;">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <h3 style="color: var(--text-primary); margin-bottom: 10px; font-size: 20px; font-weight: 600;">No contributions this year</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                    This year is empty. Create a new month to start tracking contributions.
+                </p>
+            </div>
+        </div>
+    `,
+
+    // Empty state for a year that exists but has no contributions yet
+    EMPTY_YEAR_STATE: `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 500px;">
+                <div style="font-size: 60px; color: var(--text-secondary); margin-bottom: 20px; opacity: 0.5;">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <h3 style="display: block; width: 100%; text-align: center; color: var(--text-primary); margin-bottom: 10px; font-size: 20px; font-weight: 600;">No contributions this year</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                    This year is empty. Create a month to start tracking contributions.
+                </p>
+            </div>
+        </div>
+    `,
+
+    REPORTS_EMPTY_STATE: `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 500px;">
+                <div style="font-size: 60px; color: var(--text-secondary); margin-bottom: 20px; opacity: 0.5;">
+                    <i class="fas fa-chart-bar"></i>
+                </div>
+                <h3 style="color: var(--text-primary); margin-bottom: 10px; font-size: 20px;">No Report Data</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                    Add contributions to generate reports and insights.
+                </p>
+            </div>
+        </div>
+    `,
+
+    BUDGET_EMPTY_STATE: `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 500px;">
+                <div style="font-size: 60px; color: var(--text-secondary); margin-bottom: 20px; opacity: 0.5;">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <h3 style="color: var(--text-primary); margin-bottom: 10px; font-size: 20px;">No Budget Data</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                    Create contributions first to set up and track your organization's budget.
+                </p>
+            </div>
+        </div>
+    `,
+
+    // Empty state for a month with no contributions
+    BLACKLIST_NO_MEMBERS_STATE: `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 500px;">
+                <div style="font-size: 60px; color: var(--success-color); margin-bottom: 20px; opacity: 0.7;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3 style="color: var(--text-primary); margin-bottom: 10px; font-size: 20px;">No Blacklisted Members</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                    Great! No members are currently blacklisted.
+                </p>
+            </div>
+        </div>
+    `,
+
+    SPECIAL_GIVING_NO_CAMPAIGNS_STATE: `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 20px;">
+            <div style="text-align: center; max-width: 500px;">
+                <div style="font-size: 60px; color: var(--text-secondary); margin-bottom: 20px; opacity: 0.5;">
+                    <i class="fas fa-heart"></i>
+                </div>
+                <h3 style="color: var(--text-primary); margin-bottom: 10px; font-size: 20px;">No campaigns yet</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 30px; font-size: 14px;">
+                    Create a campaign to start a special giving initiative
+                </p>
+                <button id="create-campaign-btn-empty" class="btn btn-primary" style="font-size: 16px; padding: 12px 28px;">
+                    <i class="fas fa-plus-circle"></i> Create Campaign
+                </button>
+            </div>
+        </div>
+    `,
+
+    // Create Month Form - For creating a new month/year of contributions
+    CREATE_MONTH_FORM: `
+        <div style="padding: 20px;">
+            <div style="margin-bottom: 20px;">
+                <label for="new-month-year" style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">
+                    <i class="fas fa-calendar"></i> Select Year
+                </label>
+                <select id="new-month-year" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
+                    <option value="">-- Select Year --</option>
+                </select>
+            </div>
+            <div>
+                <label for="new-month-select" style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">
+                    <i class="fas fa-calendar-day"></i> Select Month
+                </label>
+                <select id="new-month-select" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
+                    <option value="">-- Select Month --</option>
+                    <option value="January">January</option>
+                    <option value="February">February</option>
+                    <option value="March">March</option>
+                    <option value="April">April</option>
+                    <option value="May">May</option>
+                    <option value="June">June</option>
+                    <option value="July">July</option>
+                    <option value="August">August</option>
+                    <option value="September">September</option>
+                    <option value="October">October</option>
+                    <option value="November">November</option>
+                    <option value="December">December</option>
+                </select>
+            </div>
+        </div>
+    `,
+
+    // Campaign Card Template
     CAMPAIGN_CARD: (campaign) => {
         const isActive = campaign.status === 'active';
         const pledgedColor = campaign.pledgedProgress >= 100 ? '#27ae60' : campaign.pledgedProgress >= 75 ? '#f39c12' : '#667eea';
@@ -470,7 +630,7 @@ const Templates = {
                     <div class="card-icon"><i class="fas fa-chart-pie"></i></div>
                     <div class="card-content">
                         <div class="card-label">Remaining</div>
-                        <div class="card-amount">${Math.abs(data.remaining).toLocaleString()}</div>
+                        <div class="card-amount">${data.remaining.toLocaleString()}</div>
                         <div class="card-status">${data.remaining >= 0 ? 'Available' : 'Over Budget'}</div>
                     </div>
                 </div>
@@ -566,7 +726,7 @@ const Templates = {
                         <p>No expenses recorded yet</p>
                     </div>` :
                     `<div class="table-responsive">
-                        <table class="expenses-table">
+                        <table class="expenses-table" id="expenses-table">
                             <thead>
                                 <tr>
                                     <th>Date</th>
@@ -627,9 +787,7 @@ const Templates = {
         </td>
     `,
 
-    // Monthly Empty State
-    MONTHLY_EMPTY_STATE: `<td colspan="5" style="text-align: center">No contributions yet</td>`,
-
+    // Comprehensive empty state for months without contributions  
     // Yearly View Month Row
     YEARLY_MONTH_ROW: (month, totalMonthAmount, paidAmount, unpaidAmount) => `
         <td>${month}</td>
@@ -646,9 +804,6 @@ const Templates = {
         <td class="amount-unpaid"><strong>${totals.monthlyTotalUnpaid}</strong></td>
     `,
 
-    // Yearly Empty State
-    YEARLY_EMPTY_STATE: `<td colspan="4" style="text-align: center">No data for this year</td>`,
-
     // Blacklist Member Row
     BLACKLIST_MEMBER_ROW: (name, index) => `
         <td>${index + 1}</td>
@@ -661,5 +816,5 @@ const Templates = {
     `,
 
     // Blacklist Empty State
-    BLACKLIST_EMPTY_STATE: `<td colspan="3" style="text-align: center">No blacklisted members</td>`
+    BLACKLIST_EMPTY_STATE: `<td colspan="3" style="text-align: center; padding: 30px 20px; color: var(--text-secondary);"><i class="fas fa-check-circle" style="color: var(--success-color); margin-right: 10px;"></i>No blacklisted members yet. Use the form above to add one.</td>`
 };

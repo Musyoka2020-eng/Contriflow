@@ -71,34 +71,142 @@ const ViewManager = (function() {
 
         // Update display based on current view
         async updateDisplay() {
+            // Always refresh report filters in the background (even if not currently viewing reports)
+            // This ensures they're up-to-date when user switches to reports tab
+            const reportsDom = DOMManager.getReportsViewElements();
+            if (reportsDom.reportStartMonth && reportsDom.reportStartYear) {
+                ReportsManager.populateReportFilters(
+                    reportsDom.reportStartMonth,
+                    reportsDom.reportEndMonth,
+                    reportsDom.reportStartYear,
+                    reportsDom.reportEndYear,
+                    state.currentMonth,
+                    state.currentYear,
+                    state.contributionsData
+                );
+                ReportsManager.updateMemberSelect(state.contributionsData, reportsDom.reportMemberSelect);
+            }
+            
+            // Check if there are ANY years in the data (not whether they have contributions)
+            const hasYears = UIRenderer.hasAnyYears(state.contributionsData);
+
+
+            // Only show main empty state for views that depend on contribution data
+            if (!hasYears) {
+                if (state.currentView === 'monthly' || state.currentView === 'yearly') {
+                    // These views depend on contribution data - show empty state inside the tab
+
+                    UIRenderer.renderMainEmptyState();
+                    return;
+                } else {
+                    // Other tabs work independently - they handle their own empty states
+
+                }
+                
+                if (state.currentView === 'reports') {
+                    // Reports has its own empty state
+
+                    UIRenderer.renderReportsEmptyState();
+                } else if (state.currentView === 'blacklist') {
+                    // Blacklist is independent - show its own UI with form and empty state
+
+                    const hasMembersBlacklisted = state.blacklistData && 
+                        state.blacklistData.blacklistedMembers && 
+                        state.blacklistData.blacklistedMembers.length > 0;
+                    if (hasMembersBlacklisted) {
+                        UIRenderer.renderBlacklistView(state.blacklistData, state.eventHandlers);
+                    } else {
+                        UIRenderer.renderBlacklistEmptyState();
+                    }
+                } else if (state.currentView === 'budget') {
+                    // Budget is independent - show its own UI
+
+                    const hasBudgetData = state.budgetData && Object.keys(state.budgetData).length > 0;
+                    if (hasBudgetData) {
+                        const budgetDom = { budgetContent: document.getElementById('budget-content') };
+                        const totalIncome = BudgetManager.calculateBudgetFromIncome({});
+                        BudgetManager.renderBudgetUI(budgetDom, state.budgetData, totalIncome);
+                        setTimeout(() => {
+                            EventHandlers.setupBudgetEventHandlers();
+                        }, 100);
+                    } else {
+                        UIRenderer.renderBudgetEmptyState();
+                    }
+                } else if (state.currentView === 'special-giving') {
+                    // Special Giving is independent - show its own UI
+
+                    const campaigns = SpecialGivingManager.getAllCampaigns(state.campaignsData);
+                    if (campaigns && campaigns.length > 0) {
+                        UIRenderer.renderSpecialGivingView(campaigns);
+                        setTimeout(() => {
+                            EventHandlers.setupSpecialGivingEventHandlers();
+                        }, 100);
+                    } else {
+                        UIRenderer.renderSpecialGivingEmptyState();
+                        setTimeout(() => {
+                            EventHandlers.setupSpecialGivingEventHandlers();
+                        }, 100);
+                    }
+                }
+                // Settings doesn't need special handling - always shows
+                UIRenderer.applyRoleRestrictions(AuthModule.getUserRole());
+                return;
+            }
+
+            // If we have years, show normal views (they handle their own empty states)
+
+            
+            // Hide empty state overlays when data exists
+            UIRenderer.hideMainEmptyState();
+            
             if (state.currentView === 'monthly') {
+
                 UIRenderer.renderMonthlyView(
                     state.contributionsData,
                     state.currentYear,
                     state.currentMonth,
                     state.eventHandlers
                 );
+                // Add "Create Month" button to action bar
+                setTimeout(() => {
+                    UIRenderer.addCreateMonthButton();
+                }, 100);
             } else if (state.currentView === 'yearly') {
                 UIRenderer.renderYearlyView(state.contributionsData, state.currentYear);
             } else if (state.currentView === 'blacklist') {
-                UIRenderer.renderBlacklistView(state.blacklistData, state.eventHandlers);
+                const hasMembersBlacklisted = state.blacklistData && 
+                    state.blacklistData.blacklistedMembers && 
+                    state.blacklistData.blacklistedMembers.length > 0;
+                if (hasMembersBlacklisted) {
+                    UIRenderer.renderBlacklistView(state.blacklistData, state.eventHandlers);
+                } else {
+                    UIRenderer.renderBlacklistEmptyState();
+                }
             } else if (state.currentView === 'budget') {
-                // Render budget with data from appState
                 const budgetDom = { budgetContent: document.getElementById('budget-content') };
                 const totalIncome = BudgetManager.calculateBudgetFromIncome(state.contributionsData);
                 BudgetManager.renderBudgetUI(budgetDom, state.budgetData, totalIncome);
-                // Setup event handlers for budget
                 setTimeout(() => {
                     EventHandlers.setupBudgetEventHandlers();
                 }, 100);
+            } else if (state.currentView === 'reports') {
+                // When switching to reports tab with data, hide empty state and handle visibility
+                UIRenderer.hideReportsEmptyState();
+                const reportsDom = DOMManager.getReportsViewElements();
+                ReportsManager.handleReportTypeChange(reportsDom.reportTypeSelect, reportsDom.memberSelectGroup, reportsDom.statusFilterGroup);
             } else if (state.currentView === 'special-giving') {
-                // Render special giving campaigns from appState
                 const campaigns = SpecialGivingManager.getAllCampaigns(state.campaignsData);
-                UIRenderer.renderSpecialGivingView(campaigns);
-                // Setup event handlers for special giving
-                setTimeout(() => {
-                    EventHandlers.setupSpecialGivingEventHandlers();
-                }, 100);
+                if (campaigns && campaigns.length > 0) {
+                    UIRenderer.renderSpecialGivingView(campaigns);
+                    setTimeout(() => {
+                        EventHandlers.setupSpecialGivingEventHandlers();
+                    }, 100);
+                } else {
+                    UIRenderer.renderSpecialGivingEmptyState();
+                    setTimeout(() => {
+                        EventHandlers.setupSpecialGivingEventHandlers();
+                    }, 100);
+                }
             }
 
             // Apply role restrictions after rendering
@@ -145,6 +253,11 @@ const ViewManager = (function() {
 
         // Check and create current month if needed
         checkAndCreateCurrentMonth() {
+            // SAFETY: Never auto-create a year if there's no data in the system at all
+            if (!UIRenderer.hasAnyYears(state.contributionsData)) {
+                return false; // No data exists, don't create anything
+            }
+            
             if (!state.contributionsData[state.currentYear]) {
                 state.contributionsData[state.currentYear] = {};
             }
@@ -155,9 +268,15 @@ const ViewManager = (function() {
                     state.currentYear,
                     state.currentMonth
                 );
-                state.contributionsData[state.currentYear][state.currentMonth] = 
-                    ContributionsManager.createMonthDataFromPrevious(previousMonthData, state.blacklistData);
-                return true; // Month was created
+                
+                // Only auto-create a month if the previous month has contributions
+                if (previousMonthData && previousMonthData.contributions && previousMonthData.contributions.length > 0) {
+                    state.contributionsData[state.currentYear][state.currentMonth] = 
+                        ContributionsManager.createMonthDataFromPrevious(previousMonthData, state.blacklistData);
+                    return true; // Month was created
+                }
+                
+                return false; // Month not created (previous month has no contributions)
             }
             return false; // Month already exists
         },

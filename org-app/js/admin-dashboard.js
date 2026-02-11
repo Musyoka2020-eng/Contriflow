@@ -170,6 +170,35 @@ const AdminDashboard = (function() {
             allContributionsData = contributionsSnapshot.val() || {};
             const budgetsData = budgetsSnapshot.val() || {};
 
+            // Check if there's any contribution data
+            const hasData = Object.keys(allContributionsData).some(year => {
+                const yearData = allContributionsData[year];
+                return Object.keys(yearData).some(month => {
+                    return yearData[month].contributions && yearData[month].contributions.length > 0;
+                });
+            });
+
+            if (!hasData) {
+                // Show empty state
+                const financialContent = document.getElementById('financial-tab');
+                if (financialContent) {
+                    financialContent.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 20px;">
+                            <div style="text-align: center; max-width: 500px;">
+                                <div style="font-size: 60px; color: var(--text-secondary); margin-bottom: 20px; opacity: 0.5;">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <h3 style="color: var(--text-primary); margin-bottom: 10px; font-size: 20px;">No Financial Data</h3>
+                                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                                    Financial overview will appear once contributions are recorded.
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                }
+                return;
+            }
+
             // Populate year selector
             populateYearSelector(allContributionsData, budgetsData);
 

@@ -9,7 +9,6 @@ function showToast(icon, title, text) {
         text: text,
         toast: true,
         position: 'top-end',
-        showConfirmButton: false,
         timer: 3000
     });
 }
@@ -83,6 +82,31 @@ const FirebaseManager = (function() {
                 const campaignsData = campaignsSnapshot.val() || {};
                 lastSyncTime = lastSyncSnapshot.val() || null;
 
+                // CRITICAL: Clear localStorage cache completely before setting new data
+                // This ensures old stale data doesn't persist when Firebase is empty
+                localStorage.removeItem('contributionsData');
+                localStorage.removeItem('blacklistData');
+                localStorage.removeItem('budgetData');
+                localStorage.removeItem('campaignsData');
+                localStorage.removeItem('lastSyncTime');
+                localStorage.removeItem('lastCache');
+                localStorage.removeItem('lastBackup');
+
+                // Now populate localStorage with fresh Firebase data
+                localStorage.setItem('contributionsData', JSON.stringify(contributionsData));
+                localStorage.setItem('blacklistData', JSON.stringify(blacklistData));
+                localStorage.setItem('budgetData', JSON.stringify(budgetData));
+                localStorage.setItem('campaignsData', JSON.stringify(campaignsData));
+                localStorage.setItem('lastSyncTime', lastSyncTime);
+                const cachePayload = {
+                    contributionsData,
+                    blacklistData,
+                    budgetData,
+                    campaignsData,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('lastCache', JSON.stringify(cachePayload));
+
                 Swal.close();
                 return { contributionsData, blacklistData, budgetData, campaignsData, lastSyncTime };
             } catch (error) {
@@ -112,23 +136,47 @@ const FirebaseManager = (function() {
 
                 const currentUserUID = AuthModule.getCurrentUser()?.uid;
 
-                // Save to localStorage as backup
-                localStorage.setItem('contributionsData', JSON.stringify(contributionsData));
+                // Save to localStorage as BACKUP (in case of Firebase failure)
+                const backupPayload = {
+                    contributionsData,
+                    blacklistData,
+                    budgetData,
+                    campaignsData,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('contributionsData', JSON.stringify(contributionsData || {}));
                 localStorage.setItem('blacklistData', JSON.stringify(blacklistData));
+                localStorage.setItem('budgetData', JSON.stringify(budgetData || {}));
+                localStorage.setItem('campaignsData', JSON.stringify(campaignsData || {}));
+                localStorage.setItem('lastBackup', JSON.stringify(backupPayload));
 
-                // Save to Firebase
-                await database.ref('contributionsData').set(this.validateContributionsData(contributionsData));
-
-                if (userRole === 'admin') {
-                    await database.ref('blacklistData').set(this.validateBlacklistData(blacklistData));
+                // Save contributions to Firebase (only if not empty to avoid deleting data)
+                if (contributionsData && Object.keys(contributionsData).length > 0) {
+                    // Count total contributions being saved
+                    let totalContributions = 0;
+                    for (const year in contributionsData) {
+                        for (const month in contributionsData[year]) {
+                            if (contributionsData[year][month].contributions) {
+                                totalContributions += contributionsData[year][month].contributions.length;
+                            }
+                        }
+                    }
+                    await database.ref('contributionsData').set(this.validateContributionsData(contributionsData));
                 }
 
-                // Save budget data if provided
+                // Save blacklist (independent of contributions)
+                if (blacklistData) {
+                    if (userRole === 'admin') {
+                        await database.ref('blacklistData').set(this.validateBlacklistData(blacklistData));
+                    }
+                }
+
+                // Save budget data if provided (independent of contributions)
                 if (budgetData && currentUserUID) {
                     await database.ref(`budgets/${currentUserUID}`).set(budgetData);
                 }
 
-                // Save campaigns data if provided
+                // Save campaigns data if provided (independent of contributions)
                 if (campaignsData) {
                     await database.ref('specialGiving').set(campaignsData);
                 }
@@ -160,6 +208,22 @@ const FirebaseManager = (function() {
         // Sync data with Firebase
         async syncData(contributionsData, blacklistData) {
             try {
+                // CRITICAL SAFETY CHECKS - Prevent accidental data deletion
+                if (!contributionsData || Object.keys(contributionsData).length === 0) {
+                    console.error('Sync blocked: Empty contributions data detected. This would delete all data.');
+                    throw new Error('Cannot sync empty contributions data - this would delete all data');
+                }
+
+                // Count total contributions being synced
+                let totalContributions = 0;
+                for (const year in contributionsData) {
+                    for (const month in contributionsData[year]) {
+                        if (contributionsData[year][month].contributions) {
+                            totalContributions += contributionsData[year][month].contributions.length;
+                        }
+                    }
+                }
+
                 Swal.fire({
                     title: 'Syncing data...',
                     didOpen: () => { Swal.showLoading(); },
@@ -167,6 +231,10 @@ const FirebaseManager = (function() {
                     allowEscapeKey: false,
                     showConfirmButton: false
                 });
+
+                // Save to localStorage BEFORE Firebase (safety backup)
+                localStorage.setItem('contributionsData', JSON.stringify(contributionsData));
+                localStorage.setItem('blacklistData', JSON.stringify(blacklistData));
 
                 await database.ref('contributionsData').set(contributionsData);
                 await database.ref('blacklistData').set(blacklistData);

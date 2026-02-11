@@ -190,10 +190,9 @@ const CampaignExportManager = (function () {
                     try {
                         if (document.body.contains(link)) {
                             document.body.removeChild(link);
-                            console.log(`[${format}] Link removed from DOM`);
                         }
                     } catch (e) {
-                        console.warn(`[${format}] Could not remove link:`, e);
+                        // Silently handle removal failure
                     }
                 }, 3000);
 
@@ -210,14 +209,12 @@ const CampaignExportManager = (function () {
      */
     const exportAsText = async (campaign, contributions) => {
         try {
-            console.log('[TEXT] Starting export...');
             const text = generateCampaignText(campaign, contributions);
 
             if (!text || text.length === 0) {
                 throw new Error('No data to export');
             }
 
-            console.log('[TEXT] Generated:', text.length, 'characters');
             const filename = `campaign_${campaign.purpose.replace(/\s+/g, '_')}_${Date.now()}.txt`;
             const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
 
@@ -233,14 +230,12 @@ const CampaignExportManager = (function () {
      */
     const exportAsCSV = async (campaign, contributions) => {
         try {
-            console.log('[CSV] Starting export...');
             const csv = generateCSV(campaign, contributions);
 
             if (!csv || csv.length === 0) {
                 throw new Error('No data to export');
             }
 
-            console.log('[CSV] Generated:', csv.length, 'characters');
             const filename = `campaign_${campaign.purpose.replace(/\s+/g, '_')}_${Date.now()}.csv`;
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
 
@@ -262,7 +257,6 @@ const CampaignExportManager = (function () {
                     return;
                 }
 
-                console.log('[PDF] Starting export...');
                 const element = generatePDFContent(campaign, contributions);
 
                 if (!element || !element.innerHTML) {
@@ -272,7 +266,6 @@ const CampaignExportManager = (function () {
 
                 const filename = `campaign_${campaign.purpose.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
                 const contentSize = element.innerHTML.length;
-                console.log('[PDF] Generated element, size:', contentSize, 'chars');
 
                 html2pdf()
                     .set({
@@ -284,7 +277,6 @@ const CampaignExportManager = (function () {
                     .from(element)
                     .save()
                     .then(() => {
-                        console.log('[PDF] Export completed, file saved');
                         resolve({ size: contentSize, format: 'PDF' });
                     })
                     .catch(error => {

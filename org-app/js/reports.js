@@ -85,11 +85,44 @@ const ReportsManager = (function() {
             }
         },
 
+        // Check if data exists in the selected date range
+        hasDataInRange(reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData) {
+            const startMonth = reportStartMonth.value;
+            const startYear = reportStartYear.value;
+            const endMonth = reportEndMonth.value;
+            const endYear = reportEndYear.value;
+
+            const months = moment.months();
+            const startDate = moment(`${startYear}-${months.indexOf(startMonth) + 1}`, 'YYYY-M');
+            const endDate = moment(`${endYear}-${months.indexOf(endMonth) + 1}`, 'YYYY-M');
+
+            let currentDate = startDate.clone();
+
+            while (currentDate.isSameOrBefore(endDate, 'month')) {
+                const year = currentDate.format('YYYY');
+                const month = currentDate.format('MMMM');
+
+                if (contributionsData[year]?.[month]?.contributions && 
+                    contributionsData[year][month].contributions.length > 0) {
+                    return true;
+                }
+
+                currentDate.add(1, 'month');
+            }
+
+            return false;
+        },
+
         // Generate report based on type
         generateReport(reportTypeSelect, reportMemberSelect, reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData, statusFilter = 'all') {
             const reportType = reportTypeSelect.value;
 
             try {
+                // Check if data exists in the selected range first
+                if (!this.hasDataInRange(reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData)) {
+                    throw new Error(`No data available for the selected date range (${reportStartMonth.value} ${reportStartYear.value} to ${reportEndMonth.value} ${reportEndYear.value})`);
+                }
+
                 let reportData = null;
 
                 switch (reportType) {
@@ -679,14 +712,38 @@ const ReportsManager = (function() {
 
             html += '</tbody></table>';
 
-            html += '<div class="report-summary">';
-            html += '<h4>Summary</h4>';
-            html += `<p><strong>Total Months:</strong> ${reportData.summary.totalMonths}</p>`;
-            html += `<p><strong>Months with Contributions:</strong> ${reportData.summary.monthsContributed}</p>`;
-            html += `<p><strong>Total Amount:</strong> ${reportData.summary.totalAmount.toLocaleString()}/=</p>`;
-            html += `<p class="paid"><strong>Total Paid:</strong> ${reportData.summary.totalPaid.toLocaleString()}/=</p>`;
-            html += `<p class="unpaid"><strong>Total Unpaid:</strong> ${reportData.summary.totalUnpaid.toLocaleString()}/=</p>`;
-            html += '</div>';
+            // Improved summary section with better layout
+            html += `
+                <div class="report-summary">
+                    <h4><i class="fas fa-chart-bar"></i> Summary</h4>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-label">Total Months in Range</div>
+                            <div class="summary-value">${reportData.summary.totalMonths}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Months with Contributions</div>
+                            <div class="summary-value" style="color: var(--accent-green);">${reportData.summary.monthsContributed}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Amount</div>
+                            <div class="summary-value">${reportData.summary.totalAmount.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Paid</div>
+                            <div class="summary-value accent-paid">${reportData.summary.totalPaid.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Unpaid</div>
+                            <div class="summary-value accent-unpaid">${reportData.summary.totalUnpaid.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Payment Rate</div>
+                            <div class="summary-value" style="color: var(--primary-color);">${reportData.summary.totalAmount > 0 ? Math.round((reportData.summary.totalPaid / reportData.summary.totalAmount) * 100) : 0}%</div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
             return html;
         },
@@ -710,14 +767,38 @@ const ReportsManager = (function() {
 
             html += '</tbody></table>';
 
-            html += '<div class="report-summary">';
-            html += '<h4>Summary</h4>';
-            html += `<p><strong>Total Members:</strong> ${reportData.summary.totalMembers}</p>`;
-            html += `<p><strong>Total Months in Range:</strong> ${reportData.summary.totalMonthsInRange}</p>`;
-            html += `<p><strong>Grand Total:</strong> ${reportData.summary.grandTotalAmount.toLocaleString()}/=</p>`;
-            html += `<p class="paid"><strong>Total Paid:</strong> ${reportData.summary.grandTotalPaid.toLocaleString()}/=</p>`;
-            html += `<p class="unpaid"><strong>Total Unpaid:</strong> ${reportData.summary.grandTotalUnpaid.toLocaleString()}/=</p>`;
-            html += '</div>';
+            // Improved summary section with better layout
+            html += `
+                <div class="report-summary">
+                    <h4><i class="fas fa-chart-bar"></i> Summary</h4>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-label">Total Members</div>
+                            <div class="summary-value">${reportData.summary.totalMembers}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Months in Range</div>
+                            <div class="summary-value">${reportData.summary.totalMonthsInRange}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Grand Total</div>
+                            <div class="summary-value">${reportData.summary.grandTotalAmount.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Paid</div>
+                            <div class="summary-value accent-paid">${reportData.summary.grandTotalPaid.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Unpaid</div>
+                            <div class="summary-value accent-unpaid">${reportData.summary.grandTotalUnpaid.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Payment Rate</div>
+                            <div class="summary-value" style="color: var(--primary-color);">${reportData.summary.grandTotalAmount > 0 ? Math.round((reportData.summary.grandTotalPaid / reportData.summary.grandTotalAmount) * 100) : 0}%</div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
             return html;
         },
@@ -750,13 +831,30 @@ const ReportsManager = (function() {
 
             html += '</tbody></table>';
 
-            html += '<div class="report-summary">';
-            html += '<h4>Summary</h4>';
-            html += `<p><strong>Total Expected Members:</strong> ${reportData.summary.totalExpected}</p>`;
-            html += `<p class="unpaid"><strong>Never Contributed:</strong> ${reportData.summary.neverContributed}</p>`;
-            html += `<p><strong>Total Expected Amount:</strong> ${reportData.summary.totalExpectedAmount.toLocaleString()}/=</p>`;
-            html += `<p class="unpaid"><strong>Total Owed:</strong> ${reportData.summary.totalOwed.toLocaleString()}/=</p>`;
-            html += '</div>';
+            // Improved summary section with better layout
+            html += `
+                <div class="report-summary">
+                    <h4><i class="fas fa-chart-bar"></i> Summary</h4>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-label">Total Expected Members</div>
+                            <div class="summary-value">${reportData.summary.totalExpected}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Never Contributed</div>
+                            <div class="summary-value accent-unpaid">${reportData.summary.neverContributed}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Expected Amount</div>
+                            <div class="summary-value">${reportData.summary.totalExpectedAmount.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Owed</div>
+                            <div class="summary-value accent-unpaid">${reportData.summary.totalOwed.toLocaleString()}/=</div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
             return html;
         },
@@ -848,13 +946,30 @@ const ReportsManager = (function() {
 
             html += '</tbody></table>';
 
-            html += '<div class="report-summary">';
-            html += '<h4>Summary</h4>';
-            html += `<p><strong>Total Months:</strong> ${reportData.summary.totalMonths}</p>`;
-            html += `<p><strong>Grand Total:</strong> ${reportData.summary.grandTotal.toLocaleString()}/=</p>`;
-            html += `<p class="paid"><strong>Total Paid:</strong> ${reportData.summary.grandPaid.toLocaleString()}/=</p>`;
-            html += `<p class="unpaid"><strong>Total Unpaid:</strong> ${reportData.summary.grandUnpaid.toLocaleString()}/=</p>`;
-            html += '</div>';
+            // Improved summary section with better layout
+            html += `
+                <div class="report-summary">
+                    <h4><i class="fas fa-chart-bar"></i> Summary</h4>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-label">Total Months</div>
+                            <div class="summary-value">${reportData.summary.totalMonths}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Grand Total</div>
+                            <div class="summary-value">${reportData.summary.grandTotal.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Paid</div>
+                            <div class="summary-value accent-paid">${reportData.summary.grandPaid.toLocaleString()}/=</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Unpaid</div>
+                            <div class="summary-value accent-unpaid">${reportData.summary.grandUnpaid.toLocaleString()}/=</div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
             return html;
         },

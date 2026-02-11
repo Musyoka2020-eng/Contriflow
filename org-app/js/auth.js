@@ -7,7 +7,6 @@ let onAuthStateChangedCallback = () => {};
 // Initialize authentication module
 function initAuth(firebaseAuth, firebaseDatabase, authContainerSelector) {
     return new Promise((resolve) => {
-        console.log('Auth module initializing...');
         userauth = firebaseAuth;
         fdatabase = firebaseDatabase;
         authSection = document.querySelector(authContainerSelector);
@@ -17,7 +16,6 @@ function initAuth(firebaseAuth, firebaseDatabase, authContainerSelector) {
             authSection = document.createElement('section');
             authSection.className = 'auth-section';
             document.querySelector('.container').insertBefore(authSection, document.querySelector('main'));
-            console.log('Created auth section dynamically');
         }
         
         // Set up auth state change listener

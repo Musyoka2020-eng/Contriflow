@@ -82,8 +82,6 @@ class SuperAdminService {
       // Clean up temporary Firebase instance
       await firebase.app(orgAppName).delete();
 
-      console.log(`Organization created: ${slug}`);
-
       return {
         ...orgData,
         adminUser: {
@@ -93,35 +91,6 @@ class SuperAdminService {
       };
     } catch (error) {
       console.error('Failed to create organization:', error);
-      throw error;
-    }
-  }
-
-  async initializeOrgDatabase(firebaseConfig, orgName) {
-    try {
-      const instanceName = `init_${Date.now()}`;
-      const orgApp = firebase.initializeApp(firebaseConfig, instanceName);
-      const database = firebase.database(orgApp);
-
-      const initialData = {
-        contributions: {},
-        blacklist: { blacklistedMembers: [] },
-        budgets: { expenses: {} },
-        specialGiving: {},
-        config: {
-          organizationName: orgName,
-          fiscalYearStart: 'January',
-          currency: 'KSH',
-          createdAt: firebase.database.ServerValue.TIMESTAMP
-        }
-      };
-
-      await database.ref('/').set(initialData);
-      await firebase.app(instanceName).delete();
-
-      console.log('Organization database initialized');
-    } catch (error) {
-      console.error('Failed to initialize organization database:', error);
       throw error;
     }
   }
@@ -157,14 +126,12 @@ class SuperAdminService {
       // If status is 'deleted', completely remove from Firestore
       if (status === 'deleted') {
         await db.collection('organizations').doc(slug).delete();
-        console.log(`Organization "${slug}" permanently deleted from database`);
       } else {
         // For other statuses, just update the status field
         await db.collection('organizations').doc(slug).update({
           status: status,
           updatedAt: new Date().toISOString()
         });
-        console.log(`Organization "${slug}" status updated to: ${status}`);
       }
 
       return { slug, status };
@@ -180,8 +147,6 @@ class SuperAdminService {
         throw new Error('Organization slug is required');
       }
 
-      console.log(`Updating organization ${slug} with:`, updates);
-
       const db = this.centralFirestore;
       
       // Update organization fields in Firestore
@@ -190,11 +155,7 @@ class SuperAdminService {
         updatedAt: new Date().toISOString()
       };
 
-      console.log(`Final update data:`, updateData);
-
       await db.collection('organizations').doc(slug).update(updateData);
-
-      console.log(`Organization "${slug}" updated successfully`);
       return { slug, ...updates };
     } catch (error) {
       console.error(`Failed to update organization: ${slug}`, error);

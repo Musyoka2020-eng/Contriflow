@@ -561,82 +561,75 @@ const EventHandlers = (function () {
 
         // Setup special giving event handlers
         setupSpecialGivingEventHandlers() {
-            // Create campaign button - use direct DOM query since it's dynamically generated
+            // Create campaign button - handle both regular and empty state buttons
             const createCampaignBtn = document.getElementById('create-campaign-btn');
+            const createCampaignBtnEmpty = document.getElementById('create-campaign-btn-empty');
+            
+            const handleCreateCampaign = async () => {
+                const { value: formValues } = await Swal.fire({
+                    title: 'Create Special Giving Campaign',
+                    width: '500px',
+                    customClass: { container: 'swal-modal' },
+                    html: Templates.CREATE_CAMPAIGN_FORM,
+                    showCancelButton: true,
+                    confirmButtonText: 'Create Campaign',
+                    confirmButtonColor: '#667eea',
+                    cancelButtonColor: '#999',
+                    preConfirm: () => {
+                        const purpose = document.getElementById('campaign-purpose').value;
+                        const target = document.getElementById('campaign-target').value;
+                        const targetDate = document.getElementById('campaign-target-date').value;
+                        const reason = document.getElementById('campaign-reason').value;
+                        const notes = document.getElementById('campaign-notes').value;
+
+                        if (!purpose || !target) {
+                            Swal.showValidationMessage('Please fill in campaign purpose and target amount');
+                            return false;
+                        }
+
+                        if (Number(target) <= 0) {
+                            Swal.showValidationMessage('Target amount must be greater than 0');
+                            return false;
+                        }
+
+                        // Validate target date if provided
+                        if (targetDate) {
+                            const selectedDate = moment(targetDate);
+                            const today = moment().startOf('day');
+                            if (selectedDate.isBefore(today)) {
+                                Swal.showValidationMessage('Target date cannot be in the past');
+                                return false;
+                            }
+                        }
+
+                        return { purpose, target, targetDate, reason, notes };
+                    }
+                });
+            
+            if (formValues) {
+                const { purpose, target, targetDate, reason, notes } = formValues;
+                const campaignId = SpecialGivingManager.createCampaign(state.campaignsData, purpose, target, targetDate, reason, notes);
+                
+                if (campaignId) {
+                    FirebaseManager.saveData(state.contributionsData, state.blacklistData, state.budgetData, state.campaignsData);
+                    ViewManager.updateDisplay(state);
+                    Swal.fire('Success', 'Campaign created successfully!', 'success');
+                } else {
+                    Swal.fire('Error', 'Failed to create campaign', 'error');
+                }
+            }
+            };
             
             if (createCampaignBtn) {
                 const newBtn = createCampaignBtn.cloneNode(true);
                 createCampaignBtn.parentNode.replaceChild(newBtn, createCampaignBtn);
-
-                newBtn.addEventListener('click', async () => {
-                    const { value: formValues } = await Swal.fire({
-                        title: 'Create Special Giving Campaign',
-                        width: '500px',
-                        customClass: { container: 'swal-modal' },
-                        html: Templates.CREATE_CAMPAIGN_FORM,
-                        showCancelButton: true,
-                        confirmButtonText: 'Create Campaign',
-                        confirmButtonColor: '#667eea',
-                        cancelButtonColor: '#999',
-                        preConfirm: () => {
-                            const purpose = document.getElementById('campaign-purpose').value;
-                            const target = document.getElementById('campaign-target').value;
-                            const targetDate = document.getElementById('campaign-target-date').value;
-                            const reason = document.getElementById('campaign-reason').value;
-                            const notes = document.getElementById('campaign-notes').value;
-
-                            if (!purpose || !target) {
-                                Swal.showValidationMessage('Please fill in campaign purpose and target amount');
-                                return false;
-                            }
-
-                            if (Number(target) <= 0) {
-                                Swal.showValidationMessage('Target amount must be greater than 0');
-                                return false;
-                            }
-
-                            // Validate target date if provided
-                            if (targetDate) {
-                                const selectedDate = moment(targetDate);
-                                const today = moment().startOf('day');
-                                if (selectedDate.isBefore(today)) {
-                                    Swal.showValidationMessage('Target date cannot be in the past');
-                                    return false;
-                                }
-                            }
-
-                            return { purpose, target, targetDate, reason, notes };
-                        }
-                    });
-
-                    if (formValues) {
-                        try {
-                            const campaignId = SpecialGivingManager.createCampaign(
-                                state.campaignsData,
-                                formValues.purpose,
-                                formValues.target,
-                                formValues.targetDate,
-                                formValues.reason,
-                                formValues.notes
-                            );
-
-                            if (campaignId) {
-                                showSuccessToast('Campaign Created', 'Your special giving campaign is now live');
-
-                                // Trigger save
-                                state.saveDataCallback();
-
-                                // Re-render
-                                const campaigns = SpecialGivingManager.getAllCampaigns(state.campaignsData);
-                                UIRenderer.renderSpecialGivingView(campaigns);
-                                this.setupSpecialGivingEventHandlers();
-                            }
-                        } catch (error) {
-                            console.error('Error creating campaign:', error);
-                            showError('Creation Failed', 'Failed to create campaign');
-                        }
-                    }
-                });
+                newBtn.addEventListener('click', handleCreateCampaign);
+            }
+            
+            if (createCampaignBtnEmpty) {
+                const newBtnEmpty = createCampaignBtnEmpty.cloneNode(true);
+                createCampaignBtnEmpty.parentNode.replaceChild(newBtnEmpty, createCampaignBtnEmpty);
+                newBtnEmpty.addEventListener('click', handleCreateCampaign);
             }
 
             // Contribute buttons
