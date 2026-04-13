@@ -121,7 +121,6 @@ const AdminDashboard = (function() {
                 btn.addEventListener('click', saveUserRole);
             });
         } catch (error) {
-            console.error('Error loading users:', error);
             dom.adminUserList.innerHTML = 
                 '<tr><td colspan="4" style="text-align: center;">Error loading users</td></tr>';
         }
@@ -146,7 +145,6 @@ const AdminDashboard = (function() {
                 customClass: { container: 'swal-alert' }
             });
         } catch (error) {
-            console.error('Error updating role:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
@@ -206,7 +204,6 @@ const AdminDashboard = (function() {
             const selectedYear = dom.yearSelector.value;
             updateFinancialDisplay(selectedYear, allContributionsData, budgetsData);
         } catch (error) {
-            console.error('Error loading financial data:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
@@ -536,7 +533,6 @@ const AdminDashboard = (function() {
 
             downloadCSV(csv, 'users-data.csv');
         } catch (error) {
-            console.error('Error exporting users:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Export Failed',
@@ -646,7 +642,6 @@ const AdminDashboard = (function() {
             });
             return;
         } catch (error) {
-            console.error('Error exporting financial data:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Export Failed',
@@ -690,7 +685,6 @@ const AdminDashboard = (function() {
                 }
             }, 3000);
         } catch (error) {
-            console.error('Download error:', error);
             throw error;
         }
     }
@@ -727,7 +721,6 @@ const AdminDashboard = (function() {
             }, 250);
             });
         } catch (error) {
-            console.error('Error generating print report:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Print Error',
@@ -864,7 +857,6 @@ const AdminDashboard = (function() {
                             isInitialized = true;
                             resolve();
                         } catch (error) {
-                            console.error('Error checking admin role:', error);
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Error',
@@ -878,7 +870,6 @@ const AdminDashboard = (function() {
                     });
                 });
             } catch (error) {
-                console.error('Initialization error:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',

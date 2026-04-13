@@ -49,36 +49,16 @@
   <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.12/dist/sweetalert2.all.min.js"></script>
 
-  <!-- Services -->
-  <script src="/js/services/org-manager.js"></script>
-  <script src="/js/services/auth-service.js"></script>
-  <script src="/js/services/super-admin-service.js"></script>
+  <!-- Generated Firebase Config (created at build time) -->
+  <script src="/config-generated.js"></script>
 
-  <!-- Central Config -->
+  <!-- Central Config (initializes Firebase) -->
   <script src="/config-central.js"></script>
-  <script src="/js/core/superadmin-router.js"></script>
-  <script src="/js/pages/superadmin-login.js"></script>
 
-  <script>
-    window.addEventListener('DOMContentLoaded', async () => {
-      try {
-        const { auth, db } = initializeCentralFirebase();
-        window.firebaseAuth = auth;
-        window.firebaseDb = db;
-        await superAdminService.initialize(db, auth);
-        await OrgManager.getInstance().initialize(db);
-        await authService.initialize(auth, db);
-        await superAdminRouter.initialize(auth, db);
-        superAdminLoginPage.init(auth, db, superAdminRouter);
-      } catch (error) {
-        console.error('Initialization error:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Initialization Failed',
-          text: error.message || 'Failed to initialize the application.'
-        });
-      }
-    });
-  </script>
+  <!-- App Initialization (wires services together) -->
+  <script type="module" src="/js/core/app-initializer.js"></script>
+
+  <!-- Page Script (waits for app initialization) -->
+  <script type="module" src="/js/pages/superadmin-login.js"></script>
 </body>
 </html>

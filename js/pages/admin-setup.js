@@ -5,14 +5,11 @@
 
 class AdminSetupPage {
   constructor() {
-    this.auth = null;
-    this.db = null;
-    this.setupCodeHash = null;
+    this.firebaseService = null;
   }
 
-  async init(auth, db) {
-    this.auth = auth;
-    this.db = db;
+  async init(firebaseService) {
+    this.firebaseService = firebaseService;
 
     // Check if setup is needed
     const setupNeeded = await this.checkIfSetupNeeded();
@@ -37,9 +34,9 @@ class AdminSetupPage {
 
   async checkIfSetupNeeded() {
     try {
-      const snapshot = await this.db.collection('superadminUsers').limit(1).get();
-      console.log('Admin setup check - superadminUsers collection has documents:', !snapshot.empty);
-      const setupNeeded = snapshot.empty;
+      const superAdminUsers = await this.firebaseService.centralGetAll('superadminUsers');
+      console.log('Admin setup check - superadminUsers collection has documents:', superAdminUsers.length > 0);
+      const setupNeeded = superAdminUsers.length === 0;
       console.log('Setup needed:', setupNeeded);
       return setupNeeded;
     } catch (error) {
@@ -95,11 +92,11 @@ class AdminSetupPage {
       }
 
       // Create user in Firebase Auth
-      const result = await this.auth.createUserWithEmailAndPassword(email, password);
+      const result = await this.firebaseService.createUserWithEmailAndPassword(email, password);
       const uid = result.user.uid;
 
       // Create superadmin user document in Firestore
-      await this.db.collection('superadminUsers').doc(uid).set({
+      await this.firebaseService.centralSet('superadminUsers', uid, {
         uid: uid,
         email: email,
         role: 'superadmin',
@@ -108,7 +105,7 @@ class AdminSetupPage {
       });
 
       // Create user document in Firestore
-      await this.db.collection('users').doc(uid).set({
+      await this.firebaseService.centralSet('users', uid, {
         uid: uid,
         email: email,
         role: 'superadmin',
@@ -219,15 +216,56 @@ class AdminSetupPage {
   }
 
   verifySetupCode(code) {
-    /**
-     * SETUP CODE: Change this to your own secure code
-     * This should be shared with you via secure channels
-     * For production, consider using environment variables
-     */
-    const VALID_SETUP_CODE = 'STEVE_SETUP_2026';
-
-    return code === VALID_SETUP_CODE;
+    if (typeof GENERATED_SETUP_CODE === 'undefined' || GENERATED_SETUP_CODE === '') {
+      console.error('Setup code not configured. Set the SETUP_CODE environment variable and run build.js.');
+      return false;
+    }
+    return code === GENERATED_SETUP_CODE;
   }
 }
 
-const adminSetupPage = new AdminSetupPage();
+// Initialize setup page with robust timing handling
+async function initializeSetupPage() {
+  try {
+    // Check if services are already available
+    let services = window.appServices;
+    
+    if (!services) {
+      // Services not ready yet, wait for appReady event
+      services = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('App initialization timeout'));
+        }, 10000);
+        
+        const handler = (event) => {
+          clearTimeout(timeout);
+          window.removeEventListener('appReady', handler);
+          resolve(event.detail.services);
+        };
+        
+        window.addEventListener('appReady', handler);
+      });
+    }
+    
+    const { firebaseService } = services;
+    
+    const setupPage = new AdminSetupPage();
+    await setupPage.init(firebaseService);
+  } catch (error) {
+    console.error('Failed to initialize setup page:', error);
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Initialization Error',
+        text: error.message
+      });
+    }
+  }
+}
+
+// Start initialization when DOM is ready or services are ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeSetupPage);
+} else {
+  initializeSetupPage();
+}

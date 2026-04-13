@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Organization context loaded from fallback
         } else {
             // No org context available - user accessed org-app directly without proper setup
-            console.error('No organization context found - redirecting to organization selection');
             window.location.href = '/pages/error-pages/no-organization.html';
             return;
         }
@@ -32,8 +31,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Application state
-    const appState = {
+    // State listener registry — keyed by state property name
+    const _stateListeners = {};
+
+    function addStateListener(key, fn) {
+        if (!_stateListeners[key]) _stateListeners[key] = [];
+        _stateListeners[key].push(fn);
+    }
+
+    function notifyListeners(key, value) {
+        (_stateListeners[key] || []).forEach(fn => fn(value));
+    }
+
+    // Application state (wrapped in Proxy to enable reactive listeners)
+    // Contains ONLY data — no function callbacks or control flags
+    const appState = new Proxy({
         contributionsData: {},
         blacklistData: { blacklistedMembers: [] },
         budgetData: { expenses: {} },
@@ -41,11 +53,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentYear: moment().format('YYYY'),
         currentMonth: moment().format('MMMM'),
         currentView: Utils.getSavedView(), // Restore last viewed tab
-        phoneNumber: Utils.getPhoneNumber(),
-        appInitialized: false,
-        saveDataCallback: null,
-        updateDisplayCallback: null
-    };
+        phoneNumber: Utils.getPhoneNumber()
+    }, {
+        set(target, key, value) {
+            target[key] = value;
+            notifyListeners(key, value);
+            return true;
+        }
+    });
 
     // Get Firebase references
     const database = FirebaseManager.getDatabase();
@@ -54,6 +69,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize DOM Manager
     DOMManager.init();
     const dom = DOMManager.getAll();
+
+    // Auth initialization flag — not part of app data, kept local
+    let appInitialized = false;
 
     // Data operations
     async function loadData() {
@@ -73,10 +91,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Hide the loading spinner after data is loaded
             hideLoadingSpinner();
             
-            const loadTime = (performance.now() - startTime).toFixed(2);
             // Data loaded successfully
         } catch (error) {
-            console.error('Error loading data:', error);
             hideLoadingSpinner();
             Swal.fire({
                 icon: 'error',
@@ -105,16 +121,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 );
                 if (success) {
                     Utils.updateSyncStatus(FirebaseManager.getLastSyncTime());
-                    const saveTime = (performance.now() - startTime).toFixed(2);
-                    // Data saved successfully - refresh UI to ensure all views are in sync
+                            // Data saved successfully - refresh UI to ensure all views are in sync
                     try {
                         updateDisplay();
                     } catch (err) {
-                        console.error('Error refreshing display after save:', err);
+                        // Update display error - UI may be out of sync temporarily
                     }
                 }
             } catch (error) {
-                console.error('Error saving data:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Save Failed',
@@ -145,16 +159,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (data.lastSyncTime) {
                 FirebaseManager.setLastSyncTime(data.lastSyncTime);
                 Utils.updateSyncStatus(data.lastSyncTime);
-                const syncTime = (performance.now() - startTime).toFixed(2);
                 // Data synced successfully
             }
             
             // Re-initialize modules and refresh display
-            UIRenderer.init(appState);
-            ViewManager.init(appState);
+            UIRenderer.init(appState, saveData);
+            ViewManager.init(appState, eventHandlers);
             updateDisplay();
         } catch (error) {
-            console.error('Error syncing data:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Sync Failed',
@@ -166,18 +178,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Update display function
     function updateDisplay() {
         try {
-            ViewManager.updateDisplay().catch(error => {
-                console.error('Error updating display:', error);
+            ViewManager.updateDisplay().catch(() => {
+                // Display update error handled gracefully
             });
         } catch (error) {
-            console.error('Error updating display:', error);
             // Silent fail for display updates to avoid interrupting user flow
         }
     }
 
     // Setup callbacks for event handlers
-    appState.saveDataCallback = saveData;
-    appState.updateDisplayCallback = updateDisplay;
+
+    // Subscribe updateDisplay to relevant state changes
+    // Use queueMicrotask to batch multiple synchronous assignments (e.g. loadData sets 4 keys at once)
+    let _displayUpdatePending = false;
+    function scheduleDisplayUpdate() {
+        if (_displayUpdatePending) return;
+        _displayUpdatePending = true;
+        queueMicrotask(() => {
+            _displayUpdatePending = false;
+            updateDisplay();
+        });
+    }
+
+    const _displayKeys = ['contributionsData', 'blacklistData', 'budgetData', 'campaignsData', 'currentYear', 'currentMonth', 'currentView'];
+    _displayKeys.forEach(key => addStateListener(key, scheduleDisplayUpdate));
 
     // Initialize current month and year based on available data
     function initializeCurrentMonthAndYear() {
@@ -196,12 +220,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         removeFromBlacklist: EventHandlers.removeFromBlacklist.bind(EventHandlers)
     };
 
-    appState.eventHandlers = eventHandlers;
-
-    // Initialize modules with state
-    EventHandlers.init(appState);
-    ViewManager.init(appState);
-    UIRenderer.init(appState);
+    // Initialize modules with state and explicit dependencies
+    EventHandlers.init(appState, saveData);
+    ViewManager.init(appState, eventHandlers);
+    UIRenderer.init(appState, saveData);
 
     // Event listener setup
     function setupEventListeners() {
@@ -426,9 +448,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Re-initialize modules with updated appState after loading data
         // (loadData replaces appState.contributionsData, so we need to update module references)
-        UIRenderer.init(appState);
-        ViewManager.init(appState);
-        EventHandlers.init(appState);
+        UIRenderer.init(appState, saveData);
+        ViewManager.init(appState, eventHandlers);
+        EventHandlers.init(appState, saveData);
 
         // Initialize budget manager for admin users and special giving manager for all users
         const userRole = AuthModule.getUserRole();
@@ -505,15 +527,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             dom.mainContainer.style.display = 'block';
             UIRenderer.applyRoleRestrictions(user.role);
 
-            if (!appState.appInitialized) {
+            if (!appInitialized) {
                 init();
-                appState.appInitialized = true;
+                appInitialized = true;
             } else {
                 updateDisplay();
             }
         } else {
             dom.mainContainer.style.display = 'none';
-            appState.appInitialized = false;
+            appInitialized = false;
         }
     }
 
@@ -523,6 +545,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         AuthModule.setAuthStateChangedCallback(handleAuthStateChanged);
         await AuthModule.initAuth(auth, database, '.auth-section');
     } catch (error) {
-        console.error('Error initializing auth module:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Authentication Error',
+            text: 'Failed to initialize authentication. Please refresh the page.'
+        });
     }
 });

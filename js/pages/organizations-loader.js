@@ -9,30 +9,19 @@ async function loadOrganizations() {
     const container = document.getElementById('orgs-container');
 
     try {
-        // Initialize Central Firebase
-        let db;
-        
-        if (typeof centralFirestore !== 'undefined' && centralFirestore) {
-            // Use already initialized central Firestore
-            db = centralFirestore;
-        } else if (typeof CENTRAL_FIREBASE_CONFIG !== 'undefined') {
-            // Initialize central Firebase if not already done
-            const { db: centralDb } = initializeCentralFirebase();
-            db = centralDb;
-        } else {
-            throw new Error('Central Firebase configuration not found. Make sure config-central.js is loaded.');
+        // Get firebaseService from app initialization
+        if (!window.appServices || !window.appServices.firebaseService) {
+            throw new Error('Application not initialized. FirebaseService unavailable.');
         }
 
-        // Fetch organizations from central database
-        const orgsSnapshot = await db.collection('organizations').get();
-        allOrganizations = [];
+        const firebaseService = window.appServices.firebaseService;
 
-        orgsSnapshot.forEach(doc => {
-            allOrganizations.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
+        // Fetch organizations from central database using FirebaseService
+        // centralGetAll returns an array of documents with data already spread
+        const organizations = await firebaseService.centralGetAll('organizations');
+        
+        // organizations is already in the format: [{ id, name, slug, description, ... }, ...]
+        allOrganizations = organizations || [];
 
         // Sort by name
         allOrganizations.sort((a, b) => a.name.localeCompare(b.name));
@@ -178,5 +167,24 @@ function sanitizeHTML(text) {
     return div.innerHTML;
 }
 
-// Load organizations when page loads
-document.addEventListener('DOMContentLoaded', loadOrganizations);
+// Initialize when app is ready
+function initializeOrganizationsPage() {
+    // Check if app is ready
+    if (!window.appServices) {
+        // App not ready yet, wait for appReady event
+        window.addEventListener('appReady', () => {
+            initializeOrganizationsPage();
+        }, { once: true });
+        return;
+    }
+
+    console.log('[Organizations] App services loaded, loading organizations');
+    loadOrganizations();
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeOrganizationsPage);
+} else {
+    initializeOrganizationsPage();
+}

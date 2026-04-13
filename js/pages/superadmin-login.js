@@ -2,16 +2,18 @@
  * Super Admin Login Page
  */
 
+import SuperAdminRouter from '../core/superadmin-router.js';
+
 class SuperAdminLoginPage {
   constructor() {
-    this.auth = null;
-    this.db = null;
+    this.authService = null;
+    this.firebaseService = null;
     this.router = null;
   }
 
-  async init(auth, db, router) {
-    this.auth = auth;
-    this.db = db;
+  async init(authService, firebaseService, router) {
+    this.authService = authService;
+    this.firebaseService = firebaseService;
     this.router = router;
 
     // Check if setup is needed
@@ -22,10 +24,10 @@ class SuperAdminLoginPage {
 
   async checkSetupRequired() {
     try {
-      const snapshot = await this.db.collection('superadminUsers').limit(1).get();
-      console.log('Setup check - superadminUsers collection has documents:', !snapshot.empty);
+      const superAdminUsers = await this.firebaseService.centralGetAll('superadminUsers');
+      console.log('Setup check - superadminUsers collection has documents:', superAdminUsers.length > 0);
       
-      if (snapshot.empty) {
+      if (!superAdminUsers || superAdminUsers.length === 0) {
         // No super admins exist, setup is required
         console.log('Redirecting to setup page - no admins found');
         this.redirectToSetup('No admin accounts exist yet');
@@ -138,3 +140,33 @@ class SuperAdminLoginPage {
 }
 
 const superAdminLoginPage = new SuperAdminLoginPage();
+
+// Initialize when app is ready
+function initializeLoginPage() {
+  // Check if app is ready
+  if (!window.appServices) {
+    // App not ready yet, wait for appReady event
+    window.addEventListener('appReady', () => {
+      initializeLoginPage();
+    }, { once: true });
+    return;
+  }
+
+  console.log('[Login] App services loaded, initializing login page');
+  
+  const { authService, firebaseService, centralAuth, centralFirestore } = window.appServices;
+  
+  // Create and initialize router
+  const router = new SuperAdminRouter();
+  router.initialize(centralAuth, centralFirestore);
+  
+  // Initialize page with services
+  superAdminLoginPage.init(authService, firebaseService, router);
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeLoginPage);
+} else {
+  initializeLoginPage();
+}

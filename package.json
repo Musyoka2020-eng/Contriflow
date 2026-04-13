@@ -1,0 +1,30 @@
+{
+  "name": "contriflow-system",
+  "version": "1.0.0",
+  "description": "Multi-tenant contribution management system",
+  "type": "module",
+  "main": "index.html",
+  "scripts": {
+    "build": "node build.js",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "test:ui": "vitest --ui"
+  },
+  "keywords": [
+    "firebase",
+    "contributions",
+    "multi-tenant"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vitest": "^1.0.4",
+    "@vitest/ui": "^1.0.4",
+    "@testing-library/dom": "^9.3.4",
+    "jsdom": "^23.0.1"
+  },
+  "dependencies": {
+    "firebase": "^10.8.0"
+  }
+}

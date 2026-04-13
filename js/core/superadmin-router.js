@@ -5,9 +5,10 @@
  */
 
 class SuperAdminRouter {
-  constructor() {
-    this.authService = AuthService.getInstance();
-    this.superAdminService = SuperAdminService.getInstance();
+  constructor(authService = null, superAdminService = null) {
+    // Services are optional - can be injected or will be resolved from window
+    this.authService = authService || (window.AuthService?.getInstance?.() || null);
+    this.superAdminService = superAdminService || (window.SuperAdminService?.getInstance?.() || null);
     this.centralAuth = null;
     this.centralFirestore = null;
   }
@@ -15,6 +16,12 @@ class SuperAdminRouter {
   async initialize(centralAuth, centralFirestore) {
     this.centralAuth = centralAuth;
     this.centralFirestore = centralFirestore;
+
+    // Only set up auth listeners if auth is available
+    if (!this.centralAuth) {
+      console.warn('[Router] Auth not available, skipping auth state setup');
+      return;
+    }
 
     // Check auth state
     this.centralAuth.onAuthStateChanged((user) => {
@@ -29,7 +36,7 @@ class SuperAdminRouter {
       if (!user) {
         // User not authenticated
         if (!currentPath.includes('/superadmin/login')) {
-          window.location.href = '/superadmin/login.html';
+          window.location.href = '/pages/superadmin/login.html';
         }
         return;
       }
@@ -39,7 +46,7 @@ class SuperAdminRouter {
 
       if (!isSuperAdmin) {
         await this.centralAuth.signOut();
-        window.location.href = '/superadmin/login.html';
+        window.location.href = '/pages/superadmin/login.html';
         return;
       }
 
@@ -47,7 +54,7 @@ class SuperAdminRouter {
 
       // Redirect from login to dashboard if on login page
       if (currentPath.includes('/superadmin/login')) {
-        window.location.href = '/superadmin/dashboard.html';
+        window.location.href = '/pages/superadmin/dashboard.html';
       }
 
       // Fire event for pages to know admin is ready
@@ -69,6 +76,10 @@ class SuperAdminRouter {
 
   async login(email, password) {
     try {
+      if (!this.centralAuth) {
+        throw new Error('Authentication not initialized');
+      }
+
       const result = await this.centralAuth.signInWithEmailAndPassword(email, password);
       const user = result.user;
 
@@ -87,8 +98,12 @@ class SuperAdminRouter {
 
   async logout() {
     try {
+      if (!this.centralAuth) {
+        throw new Error('Authentication not initialized');
+      }
+
       await this.centralAuth.signOut();
-      window.location.href = '/superadmin/login.html';
+      window.location.href = '/pages/superadmin/login.html';
     } catch (error) {
       console.error('Logout failed:', error);
       throw error;
@@ -103,4 +118,4 @@ class SuperAdminRouter {
   }
 }
 
-const superAdminRouter = SuperAdminRouter.getInstance();
+export default SuperAdminRouter;

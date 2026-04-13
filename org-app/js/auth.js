@@ -4,93 +4,106 @@ let currentUser = null;
 let authSection;
 let onAuthStateChangedCallback = () => {};
 
-// Initialize authentication module
+/**
+ * Initialize authentication module
+ * @param {Object} firebaseAuth - Firebase Auth instance
+ * @param {Object} firebaseDatabase - Firebase Realtime Database instance
+ * @param {string} authContainerSelector - CSS selector for auth container
+ * @returns {Promise} Resolves when auth state is first determined
+ */
 function initAuth(firebaseAuth, firebaseDatabase, authContainerSelector) {
     return new Promise((resolve) => {
+        if (!firebaseAuth || !firebaseDatabase) {
+            throw new Error('Firebase instances are required');
+        }
+
         userauth = firebaseAuth;
         fdatabase = firebaseDatabase;
         authSection = document.querySelector(authContainerSelector);
         
+        // Create auth section if not found in DOM
         if (!authSection) {
-            console.error('Auth container not found');
+            const container = document.querySelector('.container');
+            const mainElement = container?.querySelector('main');
+            
             authSection = document.createElement('section');
             authSection.className = 'auth-section';
-            document.querySelector('.container').insertBefore(authSection, document.querySelector('main'));
+            
+            if (container && mainElement) {
+                container.insertBefore(authSection, mainElement);
+            }
         }
         
         // Set up auth state change listener
         userauth.onAuthStateChanged(async (user) => {
             if (user) {
-                // User is signed in
-                try {
-                    // Check user role from database
-                    const userRef = fdatabase.ref(`users/${user.uid}`);
-                    const userSnapshot = await userRef.once('value');
-                    
-                    if (!userSnapshot.exists()) {
-                        // First-time user, set as viewer by default
-                        await userRef.set({
-                            email: user.email,
-                            role: 'viewer',
-                            createdAt: firebase.database.ServerValue.TIMESTAMP
-                        });
-                        
-                        user.role = 'viewer';
-                    } else {
-                        user.role = userSnapshot.val().role || 'viewer';
-                    }
-                    
-                    currentUser = user;
-                    
-                    // Show authenticated UI
-                    showAuthenticatedUI(user);
-                    
-                    // Notify app.js about authentication change
-                    onAuthStateChangedCallback(user);
-                } catch (error) {
-                    console.error('Error setting up user data:', error);
-                    logoutUser();
-                    showToast('error', 'Authentication Error', 'Failed to load user data. Please try again.');
-                }
+                // User is signed in - load user data
+                await setupUserData(user);
+                showAuthenticatedUI(user);
+                onAuthStateChangedCallback(user);
             } else {
                 // User is signed out
                 currentUser = null;
                 showLoginUI();
-                
-                // Notify app.js about authentication change
                 onAuthStateChangedCallback(null);
             }
-            // Resolve the promise when auth state is first determined
+            
             resolve();
         });
     });
 }
 
-// Set callback for auth state changes
+/**
+ * Set up user data from database
+ * @param {Object} user - Firebase auth user
+ */
+async function setupUserData(user) {
+    try {
+        const userRef = fdatabase.ref(`users/${user.uid}`);
+        const userSnapshot = await userRef.once('value');
+        
+        if (!userSnapshot.exists()) {
+            // First-time user, set as viewer by default
+            await userRef.set({
+                email: user.email,
+                role: 'viewer',
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            user.role = 'viewer';
+        } else {
+            const userData = userSnapshot.val();
+            user.role = userData?.role || 'viewer';
+        }
+        
+        currentUser = user;
+    } catch (error) {
+        await ErrorHandler.showError(error, 'Authentication Error', {
+            text: 'Failed to load user data. Please try again.'
+        });
+        logoutUser();
+    }
+}
+
+/**
+ * Set callback for auth state changes
+ * @param {Function} callback - Function to call when auth state changes
+ */
 function setAuthStateChangedCallback(callback) {
     if (typeof callback === 'function') {
         onAuthStateChangedCallback = callback;
     }
 }
 
-// Show login UI
+/**
+ * Display login and signup forms
+ */
 function showLoginUI() {
-    // Show the home link when not authenticated
     const homeLink = document.querySelector('.home-link');
     if (homeLink) {
         homeLink.style.display = 'flex';
     }
 
-    // Hide the initial loading spinner when showing login UI
-    const spinner = document.getElementById('initial-loading-spinner');
-    if (spinner) {
-        spinner.classList.add('hidden');
-        setTimeout(() => {
-            if (spinner.parentNode) {
-                spinner.remove();
-            }
-        }, 300);
-    }
+    removeLoadingSpinner();
 
     if (!authSection) return;
     
@@ -102,7 +115,7 @@ function showLoginUI() {
             <div class="auth-card">
                 <div class="auth-header">
                     <div class="org-logo">${orgInitial}</div>
-                    <h1>${sanitizeHTML(orgName)}</h1>
+                    <h1>${InputValidator.sanitizeHTML(orgName)}</h1>
                     <p class="auth-subtitle">Manage your group contributions with ease</p>
                 </div>
 
@@ -165,34 +178,62 @@ function showLoginUI() {
         </div>
     `;
     
-    // Tab switching
-    document.getElementById('login-tab-btn').addEventListener('click', () => {
-        document.getElementById('login-form').classList.add('active-form');
-        document.getElementById('signup-form').classList.remove('active-form');
-        document.getElementById('login-tab-btn').classList.add('active');
-        document.getElementById('signup-tab-btn').classList.remove('active');
-    });
-    
-    document.getElementById('signup-tab-btn').addEventListener('click', () => {
-        document.getElementById('signup-form').classList.add('active-form');
-        document.getElementById('login-form').classList.remove('active-form');
-        document.getElementById('signup-tab-btn').classList.add('active');
-        document.getElementById('login-tab-btn').classList.remove('active');
-    });
-    
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
-    document.getElementById('signup-form').addEventListener('submit', handleSignup);
+    attachFormHandlers();
 }
 
-// Show authenticated UI
-function showAuthenticatedUI(user) {
-    // Hide the home link when user is authenticated
-    const homeLink = document.querySelector('.home-link');
-    if (homeLink) {
-        homeLink.style.display = 'none';
+/**
+ * Attach event listeners to login/signup forms
+ */
+function attachFormHandlers() {
+    const loginTab = document.getElementById('login-tab-btn');
+    const signupTab = document.getElementById('signup-tab-btn');
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+
+    // Tab switching
+    if (loginTab) {
+        loginTab.addEventListener('click', () => switchAuthTab('login'));
+    }
+    if (signupTab) {
+        signupTab.addEventListener('click', () => switchAuthTab('signup'));
     }
 
-    // Hide the initial loading spinner when authenticated user is shown
+    // Form submission
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
+    if (signupForm) {
+        signupForm.addEventListener('submit', handleSignup);
+    }
+}
+
+/**
+ * Switch between login and signup tabs
+ * @param {string} tab - Tab name: 'login' or 'signup'
+ */
+function switchAuthTab(tab) {
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const loginTab = document.getElementById('login-tab-btn');
+    const signupTab = document.getElementById('signup-tab-btn');
+
+    if (tab === 'login') {
+        loginForm?.classList.add('active-form');
+        signupForm?.classList.remove('active-form');
+        loginTab?.classList.add('active');
+        signupTab?.classList.remove('active');
+    } else {
+        signupForm?.classList.add('active-form');
+        loginForm?.classList.remove('active-form');
+        signupTab?.classList.add('active');
+        loginTab?.classList.remove('active');
+    }
+}
+
+/**
+ * Remove loading spinner from DOM
+ */
+function removeLoadingSpinner() {
     const spinner = document.getElementById('initial-loading-spinner');
     if (spinner) {
         spinner.classList.add('hidden');
@@ -202,20 +243,34 @@ function showAuthenticatedUI(user) {
             }
         }, 300);
     }
+}
+
+/**
+ * Display authenticated user UI
+ * @param {Object} user - Firebase auth user object
+ */
+function showAuthenticatedUI(user) {
+    if (!user || !currentUser) return;
+
+    const homeLink = document.querySelector('.home-link');
+    if (homeLink) {
+        homeLink.style.display = 'none';
+    }
+
+    removeLoadingSpinner();
 
     if (!authSection) return;
 
-    let adminButton = '';
-    if (user.role === 'admin') {
-        adminButton = '<button id="admin-dashboard-btn" class="btn btn-small"><i class="fas fa-user-shield"></i> Admin</button>';
-    }
+    const adminButton = user.role === 'admin' 
+        ? '<button id="admin-dashboard-btn" class="btn btn-small"><i class="fas fa-user-shield"></i> Admin</button>'
+        : '';
     
     authSection.innerHTML = `
         <div class="user-info">
             <div class="user-details">
                 <i class="fas fa-user-circle"></i>
-                <span class="user-email">${sanitizeHTML(user.email)}</span>
-                <span class="user-role-badge">${user.role}</span>
+                <span class="user-email">${InputValidator.sanitizeHTML(user.email)}</span>
+                <span class="user-role-badge">${InputValidator.sanitizeHTML(user.role)}</span>
             </div>
             <div class="user-actions">
                 ${adminButton}
@@ -224,234 +279,251 @@ function showAuthenticatedUI(user) {
         </div>
     `;
     
-    document.getElementById('logout-btn').addEventListener('click', logoutUser);
-    
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logoutUser);
+    }
+
     if (user.role === 'admin') {
-        document.getElementById('admin-dashboard-btn').addEventListener('click', showAdminDashboard);
+        const adminBtn = document.getElementById('admin-dashboard-btn');
+        if (adminBtn) {
+            adminBtn.addEventListener('click', showAdminDashboard);
+        }
     }
 }
 
-// Handle login
+/**
+ * Handle login form submission
+ * @param {Event} e - Form submit event
+ */
 async function handleLogin(e) {
     e.preventDefault();
     
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
+    // Validate inputs
+    const emailInput = document.getElementById('login-email');
+    const passwordInput = document.getElementById('login-password');
     
-    if (!email || !password) {
-        showToast('error', 'Login Error', 'Please enter both email and password');
+    if (!emailInput || !passwordInput) {
+        await ErrorHandler.showErrorToast(new Error('Form elements not found'), 'Form Error');
         return;
     }
-    
-    try {
-        const loadingToast = Swal.fire({
-            title: 'Logging In...',
-            didOpen: () => {
-                Swal.showLoading();
-            },
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-        });
 
-        await userauth.signInWithEmailAndPassword(email, password);
-        Swal.close();
-    } catch (error) {
-        console.error('Login error:', error);
-        showToast('error', 'Login Failed', getAuthErrorMessage(error));
+    const emailValidation = InputValidator.validateEmail(emailInput.value);
+    const passwordValidation = InputValidator.validatePassword(passwordInput.value);
+
+    if (!emailValidation.valid || !passwordValidation.valid) {
+        const errorMessage = emailValidation.error || passwordValidation.error;
+        await ErrorHandler.showErrorToast(new Error(errorMessage), 'Validation Error');
+        return;
     }
+
+    await ErrorHandler.handle(
+        async () => {
+            Swal.fire({
+                title: 'Logging In...',
+                didOpen: () => Swal.showLoading(),
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+
+            await userauth.signInWithEmailAndPassword(emailValidation.value, passwordInput.value);
+            Swal.close();
+        },
+        'Login',
+        { showUI: false }
+    );
 }
 
-// Handle signup
+/**
+ * Handle signup form submission
+ * @param {Event} e - Form submit event
+ */
 async function handleSignup(e) {
     e.preventDefault();
     
-    const email = document.getElementById('signup-email').value.trim();
-    const password = document.getElementById('signup-password').value;
-    const confirm = document.getElementById('signup-confirm').value;
+    // Validate inputs
+    const emailInput = document.getElementById('signup-email');
+    const passwordInput = document.getElementById('signup-password');
+    const confirmInput = document.getElementById('signup-confirm');
     
-    if (!email || !password || !confirm) {
-        showToast('error', 'Registration Error', 'Please fill in all fields');
+    if (!emailInput || !passwordInput || !confirmInput) {
+        await ErrorHandler.showErrorToast(new Error('Form elements not found'), 'Form Error');
         return;
     }
-    
-    if (password !== confirm) {
-        showToast('error', 'Password Mismatch', 'Passwords do not match');
+
+    const emailValidation = InputValidator.validateEmail(emailInput.value);
+    const passwordValidation = InputValidator.validatePassword(passwordInput.value);
+    const matchValidation = InputValidator.validatePasswordMatch(passwordInput.value, confirmInput.value);
+
+    if (!emailValidation.valid || !passwordValidation.valid || !matchValidation.valid) {
+        const errorMessage = emailValidation.error || passwordValidation.error || matchValidation.error;
+        await ErrorHandler.showErrorToast(new Error(errorMessage), 'Validation Error');
         return;
     }
-    
-    if (password.length < 6) {
-        showToast('error', 'Password Too Short', 'Password must be at least 6 characters');
-        return;
-    }
-    
-    try {
-        const loadingToast = Swal.fire({
-            title: 'Creating Account...',
-            didOpen: () => {
-                Swal.showLoading();
-            },
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-        });
-        
-        await userauth.createUserWithEmailAndPassword(email, password);
-        Swal.close();
-    } catch (error) {
-        console.error('Signup error:', error);
-        showToast('error', 'Registration Failed', getAuthErrorMessage(error));
-    }
+
+    await ErrorHandler.handle(
+        async () => {
+            Swal.fire({
+                title: 'Creating Account...',
+                didOpen: () => Swal.showLoading(),
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+
+            await userauth.createUserWithEmailAndPassword(emailValidation.value, passwordInput.value);
+            Swal.close();
+        },
+        'Account Creation',
+        { showUI: false }
+    );
 }
 
-// Log out the current user
-function logoutUser() {
-    userauth.signOut().catch(error => {
-        console.error('Logout error:', error);
-    });
+/**
+ * Log out the current user
+ */
+async function logoutUser() {
+    await ErrorHandler.handle(
+        async () => userauth.signOut(),
+        'Logout',
+        { showUI: false }
+    );
 }
 
-// Get readable auth error messages
-function getAuthErrorMessage(error) {
-    switch (error.code) {
-        case 'auth/user-not-found':
-            return 'No account exists with this email';
-        case 'auth/wrong-password':
-            return 'Incorrect password';
-        case 'auth/email-already-in-use':
-            return 'This email is already registered';
-        case 'auth/weak-password':
-            return 'Password is too weak';
-        case 'auth/invalid-email':
-            return 'Invalid email format';
-        default:
-            return `Error: ${error.message}`;
-    }
-}
-
-// Show toast notification
-function showToast(icon, title, text) {
-    Swal.fire({
-        icon: icon,
-        title: title,
-        text: text,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000
-    });
-}
-
-// Show admin dashboard
+/**
+ * Navigate to admin dashboard
+ */
 function showAdminDashboard() {
-    // Navigate to admin dashboard page
-    // The admin-dashboard.js will verify admin role on that page
     window.location.href = 'admin-dashboard.html';
 }
 
-// Load user list for admin dashboard
+/**
+ * Load and display user list for admin management
+ */
 async function loadUserList() {
-    try {
-        const usersRef = fdatabase.ref('users');
-        const usersSnapshot = await usersRef.once('value');
-        const users = usersSnapshot.val();
-        
-        if (!users) {
-            document.getElementById('user-list').innerHTML = '<p>No users found</p>';
-            return;
-        }
-        
-        let userTable = `
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        
-        for (const uid in users) {
-            if (!Object.prototype.hasOwnProperty.call(users, uid)) continue;
-            
-            const user = users[uid];
-            userTable += `
+    const userListElement = document.getElementById('user-list');
+    if (!userListElement) return;
+
+    const result = await ErrorHandler.handle(
+        async () => {
+            const usersRef = fdatabase.ref('users');
+            const snapshot = await usersRef.once('value');
+            return snapshot.val();
+        },
+        'Load Users',
+        { showUI: false }
+    );
+
+    if (!result) {
+        userListElement.innerHTML = '<p>Unable to load user list. Please try again.</p>';
+        return;
+    }
+
+    if (!result || Object.keys(result).length === 0) {
+        userListElement.innerHTML = '<p>No users found</p>';
+        return;
+    }
+
+    let userTable = `
+        <table class="admin-table">
+            <thead>
                 <tr>
-                    <td>${sanitizeHTML(user.email)}</td>
-                    <td>
-                        <select class="role-select" data-uid="${uid}">
-                            <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
-                            <option value="editor" ${user.role === 'editor' ? 'selected' : ''}>Editor</option>
-                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
-                        </select>
-                    </td>
-                    <td>
-                        <button class="btn btn-small save-role" data-uid="${uid}">Save</button>
-                    </td>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Actions</th>
                 </tr>
-            `;
-        }
+            </thead>
+            <tbody>
+    `;
+    
+    for (const [uid, user] of Object.entries(result)) {
+        if (!user || !user.email) continue;
         
         userTable += `
-                </tbody>
-            </table>
+            <tr>
+                <td>${InputValidator.sanitizeHTML(user.email)}</td>
+                <td>
+                    <select class="role-select" data-uid="${InputValidator.sanitizeHTML(uid)}">
+                        <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                        <option value="editor" ${user.role === 'editor' ? 'selected' : ''}>Editor</option>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </td>
+                <td>
+                    <button class="btn btn-small save-role" data-uid="${InputValidator.sanitizeHTML(uid)}">Save</button>
+                </td>
+            </tr>
         `;
-        
-        document.getElementById('user-list').innerHTML = userTable;
-        
-        // Add event listeners
-        for(const btn of document.querySelectorAll('.save-role')) {
-            btn.addEventListener('click', updateUserRole);
-        }
-    } catch (error) {
-        console.error('Error loading users:', error);
-        document.getElementById('user-list').innerHTML = '<p>Error loading users</p>';
     }
+    
+    userTable += `
+            </tbody>
+        </table>
+    `;
+    
+    userListElement.innerHTML = userTable;
+    
+    // Attach event listeners
+    document.querySelectorAll('.save-role').forEach(btn => {
+        btn.addEventListener('click', updateUserRole);
+    });
 }
 
-// Update user role
+/**
+ * Update user role in database
+ * @param {Event} e - Click event from save button
+ */
 async function updateUserRole(e) {
     const uid = e.target.dataset.uid;
     const roleSelect = document.querySelector(`.role-select[data-uid="${uid}"]`);
-    const newRole = roleSelect.value;
     
-    try {
-        await fdatabase.ref(`users/${uid}/role`).set(newRole);
-        showToast('success', 'Role Updated', 'User role has been updated successfully');
-    } catch (error) {
-        console.error('Error updating role:', error);
-        showToast('error', 'Update Failed', 'Failed to update user role');
+    if (!roleSelect) return;
+
+    const newRole = roleSelect.value;
+    const result = await ErrorHandler.handle(
+        async () => {
+            await fdatabase.ref(`users/${uid}/role`).set(newRole);
+            return true;
+        },
+        'Update User Role',
+        { showUI: true }
+    );
+
+    if (result) {
+        await ErrorHandler.showErrorToast(
+            { message: 'User role updated successfully' },
+            'Success'
+        );
     }
 }
 
-// Check if user is authenticated
+/**
+ * Check if current user is authenticated
+ * @returns {boolean}
+ */
 function isUserAuthenticated() {
     return currentUser !== null;
 }
 
-// Get current user
+/**
+ * Get current authenticated user object
+ * @returns {Object|null} Firebase user object or null
+ */
 function getCurrentUser() {
     return currentUser;
 }
 
-// Get user role
+/**
+ * Get current user's role
+ * @returns {string} User role (admin, editor, or viewer)
+ */
 function getUserRole() {
     return currentUser?.role || 'viewer';
-}
-
-// Sanitize HTML to prevent XSS
-function sanitizeHTML(text) {
-    if (!text) return '';
-    
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // Export functions for use in app.js
@@ -462,5 +534,5 @@ window.AuthModule = {
     getCurrentUser,
     getUserRole,
     logoutUser,
-    sanitizeHTML
+    loadUserList
 };

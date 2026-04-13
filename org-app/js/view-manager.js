@@ -7,14 +7,17 @@ const ViewManager = (function() {
         blacklistData: { blacklistedMembers: [] },
         currentYear: '',
         currentMonth: '',
-        currentView: 'monthly',
-        eventHandlers: null
+        currentView: 'monthly'
     };
+
+    // Injected event handler callbacks (kept separate from data state)
+    let _eventHandlers = null;
 
     return {
         // Initialize view manager with state
-        init(stateObj) {
+        init(stateObj, eventHandlers) {
             state = stateObj;
+            _eventHandlers = eventHandlers;
         },
 
         // Handle view change
@@ -114,7 +117,7 @@ const ViewManager = (function() {
                         state.blacklistData.blacklistedMembers && 
                         state.blacklistData.blacklistedMembers.length > 0;
                     if (hasMembersBlacklisted) {
-                        UIRenderer.renderBlacklistView(state.blacklistData, state.eventHandlers);
+                        UIRenderer.renderBlacklistView(state.blacklistData, _eventHandlers);
                     } else {
                         UIRenderer.renderBlacklistEmptyState();
                     }
@@ -165,7 +168,7 @@ const ViewManager = (function() {
                     state.contributionsData,
                     state.currentYear,
                     state.currentMonth,
-                    state.eventHandlers
+                    _eventHandlers
                 );
                 // Add "Create Month" button to action bar
                 setTimeout(() => {
@@ -178,7 +181,7 @@ const ViewManager = (function() {
                     state.blacklistData.blacklistedMembers && 
                     state.blacklistData.blacklistedMembers.length > 0;
                 if (hasMembersBlacklisted) {
-                    UIRenderer.renderBlacklistView(state.blacklistData, state.eventHandlers);
+                    UIRenderer.renderBlacklistView(state.blacklistData, _eventHandlers);
                 } else {
                     UIRenderer.renderBlacklistEmptyState();
                 }

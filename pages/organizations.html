@@ -55,9 +55,20 @@
         <p>&copy; 2026 ContriFlow. All rights reserved.</p>
     </footer>
 
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <!-- Firebase SDK (compat version for global API) -->
+    <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
+
+    <!-- Generated Firebase Config (created at build time) -->
+    <script src="../config-generated.js"></script>
+
+    <!-- Central Config (initializes Firebase) -->
     <script src="../config-central.js"></script>
-    <script src="../js/pages/organizations-loader.js"></script>
+
+    <!-- App Initialization (wires services together) -->
+    <script type="module" src="../js/core/app-initializer.js"></script>
+
+    <!-- Page Script (waits for app initialization) -->
+    <script type="module" src="../js/pages/organizations-loader.js"></script>
 </body>
 </html>

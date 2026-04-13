@@ -2,22 +2,25 @@
  * Super Admin Dashboard Page
  */
 
+import SuperAdminRouter from '../core/superadmin-router.js';
+
 class SuperAdminDashboard {
   constructor() {
     this.auth = null;
-    this.database = null;
+    this.firebaseService = null;
+    this.orgManager = null;
+    this.superAdminService = null;
     this.router = null;
-    this.superAdminService = SuperAdminService.getInstance();
     this.organizations = [];
-    this.editingOrgSlug = null; // Track if we're editing an organization
+    this.editingOrgSlug = null;
   }
 
-  async init(auth, database, router) {
-    this.auth = auth;
-    this.database = database;
+  async init(firebaseService, orgManager, superAdminService, router) {
+    this.firebaseService = firebaseService;
+    this.orgManager = orgManager;
+    this.superAdminService = superAdminService;
     this.router = router;
 
-    await this.superAdminService.initialize(database, auth);
     this.setupEventListeners();
     await this.loadOrganizations();
   }
@@ -367,4 +370,59 @@ class SuperAdminDashboard {
   }
 }
 
-const superAdminDashboard = new SuperAdminDashboard();
+// Initialize dashboard when app is ready
+// Use a more robust approach: either event or already-initialized
+async function initializeDashboard() {
+  try {
+    // Check if services are already available
+    let services = window.appServices;
+    
+    if (!services) {
+      // Services not ready yet, wait for appReady event
+      services = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('App initialization timeout'));
+        }, 10000);
+        
+        const handler = (event) => {
+          clearTimeout(timeout);
+          window.removeEventListener('appReady', handler);
+          resolve(event.detail.services);
+        };
+        
+        window.addEventListener('appReady', handler);
+      });
+    }
+    
+    const { firebaseService, orgManager, superAdminService, centralAuth, centralFirestore } = services;
+    
+    // Create and initialize router
+    const router = new SuperAdminRouter();
+    router.initialize(centralAuth, centralFirestore);
+    
+    const dashboard = new SuperAdminDashboard();
+    await dashboard.init(firebaseService, orgManager, superAdminService, router);
+    
+    // Expose globally for inline onclick handlers
+    window.superAdminDashboard = dashboard;
+  } catch (error) {
+    console.error('Failed to initialize dashboard:', error);
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Initialization Error',
+        text: error.message
+      });
+    }
+  }
+}
+
+// Start initialization when DOM is ready or services are ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeDashboard);
+} else {
+  initializeDashboard();
+}
+
+// Export for testing
+export default SuperAdminDashboard;

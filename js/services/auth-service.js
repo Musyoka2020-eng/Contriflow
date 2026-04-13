@@ -1,24 +1,28 @@
+import FirebaseService from './firebase-service.js';
+import OrgManager from './org-manager.js';
+
 /**
  * Authentication Service
  * Handles multi-tenant authentication
- * Uses Firestore for central database
+ * Depends on FirebaseService for database operations
+ * Optionally updates StateManager with authentication state
  */
 
 class AuthService {
-  constructor() {
-    this.centralAuth = null;
-    this.centralFirestore = null;
+  constructor(firebaseService = null, orgManager = null, stateManager = null) {
+    // Dependency injection with defaults
+    this.firebaseService = firebaseService || FirebaseService.getInstance();
+    this.orgManager = orgManager || OrgManager.getInstance();
+    this.stateManager = stateManager || null; // Optional StateManager for state updates
+    
     this.currentUser = null;
     this.currentUserRole = null;
     this.userOrganizations = [];
-    this.orgManager = OrgManager.getInstance();
   }
 
-  async initialize(centralAuth, centralFirestore) {
-    this.centralAuth = centralAuth;
-    this.centralFirestore = centralFirestore;
-
-    this.centralAuth.onAuthStateChanged(async (user) => {
+  async initialize() {
+    // Subscribe to auth state changes
+    this.firebaseService.onAuthStateChanged(async (user) => {
       if (user) {
         await this.handleUserSignIn(user);
       } else {
@@ -38,14 +42,15 @@ class AuthService {
         photoURL: user.photoURL
       };
 
-      const userDoc = await this.centralFirestore.collection('users').doc(user.uid).get();
+      // Get user document from Firestore using FirebaseService
+      const userDocResult = await this.firebaseService.centralGet('users', user.uid);
 
-      if (userDoc.exists) {
-        const userData = userDoc.data();
+      if (userDocResult.exists) {
+        const userData = userDocResult.data;
         this.currentUserRole = userData.role || 'user';
       } else {
-        // Create user document in Firestore
-        await this.centralFirestore.collection('users').doc(user.uid).set({
+        // Create user document in Firestore using FirebaseService
+        await this.firebaseService.centralSet('users', user.uid, {
           email: user.email,
           role: 'user',
           createdAt: new Date().toISOString()
@@ -55,8 +60,17 @@ class AuthService {
 
       await this.orgManager.loadUserOrganizations(user.uid);
       this.userOrganizations = this.orgManager.userOrganizations;
+
+      // Update StateManager if available
+      if (this.stateManager) {
+        this.stateManager.setCurrentUser(this.currentUser);
+        this.stateManager.setUserRole(this.currentUserRole);
+        this.stateManager.setUserOrganizations(this.userOrganizations);
+      }
     } catch (error) {
-      console.error('Failed to handle user sign in:', error);
+      if (this.stateManager) {
+        this.stateManager.setError('Failed to load user data: ' + error.message);
+      }
       throw error;
     }
   }
@@ -66,50 +80,46 @@ class AuthService {
     this.currentUserRole = null;
     this.userOrganizations = [];
     this.orgManager.clearCurrentOrg();
+
+    // Update StateManager if available
+    if (this.stateManager) {
+      this.stateManager.clearUserData();
+    }
   }
 
   async signUp(email, password) {
     try {
-      const result = await this.centralAuth.createUserWithEmailAndPassword(
-        email,
-        password
-      );
+      // Use FirebaseService for user creation
+      const userResult = await this.firebaseService.createUserWithEmailAndPassword(email, password);
 
-      const user = result.user;
-
-      await this.centralFirestore.collection('users').doc(user.uid).set({
+      // Create user document in Firestore using FirebaseService
+      await this.firebaseService.centralSet('users', userResult.uid, {
         email: email,
         role: 'user',
         createdAt: new Date().toISOString()
       });
 
-      return { uid: user.uid, email: user.email };
+      return { uid: userResult.uid, email: userResult.email };
     } catch (error) {
-      console.error('Sign up failed:', error);
       throw error;
     }
   }
 
   async signIn(email, password) {
     try {
-      const result = await this.centralAuth.signInWithEmailAndPassword(
-        email,
-        password
-      );
-      console.log(`User signed in: ${email}`);
-      return result.user;
+      // Use FirebaseService for sign in
+      const user = await this.firebaseService.signInWithEmailAndPassword(email, password);
+      return user;
     } catch (error) {
-      console.error('Sign in failed:', error);
       throw error;
     }
   }
 
   async signOut() {
     try {
-      await this.centralAuth.signOut();
-      console.log('User signed out');
+      // Use FirebaseService for sign out
+      await this.firebaseService.signOut();
     } catch (error) {
-      console.error('Sign out failed:', error);
       throw error;
     }
   }
@@ -162,3 +172,5 @@ class AuthService {
 }
 
 const authService = AuthService.getInstance();
+
+export default AuthService;

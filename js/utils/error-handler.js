@@ -1,0 +1,170 @@
+/**
+ * Error Handler Utility
+ * Provides consistent error handling, user feedback, and error logging
+ * Production-safe: No sensitive data logged, only relevant error context
+ */
+
+const ErrorHandler = (() => {
+  const ERROR_MESSAGES = {
+    // Auth errors
+    'auth/email-already-in-use': 'This email is already registered. Please use a different email or try logging in.',
+    'auth/weak-password': 'Password must be at least 6 characters long.',
+    'auth/invalid-email': 'Please enter a valid email address.',
+    'auth/user-disabled': 'This account has been disabled.',
+    'auth/user-not-found': 'No account found with this email. Please create a new account.',
+    'auth/wrong-password': 'Incorrect password. Please try again.',
+    'auth/too-many-requests': 'Too many failed login attempts. Please try again later.',
+
+    // Firebase errors
+    'permission-denied': 'You do not have permission to perform this action.',
+    'not-found': 'The requested resource was not found.',
+    'already-exists': 'This resource already exists.',
+    'unavailable': 'Service is temporarily unavailable. Please try again later.',
+    'network-error': 'Network error. Please check your connection and try again.',
+
+    // Generic fallbacks
+    'default': 'An unexpected error occurred. Please try again or contact support if the problem persists.'
+  };
+
+  /**
+   * Extract user-friendly message from error object
+   * @param {Error|Object} error - The error object
+   * @returns {string} User-friendly error message
+   */
+  function getUserMessage(error) {
+    if (!error) return ERROR_MESSAGES.default;
+
+    // Check Firebase auth error code
+    if (error.code) {
+      return ERROR_MESSAGES[error.code] || ERROR_MESSAGES.default;
+    }
+
+    // Check for common error patterns
+    if (error.message) {
+      const message = error.message.toLowerCase();
+      if (message.includes('network') || message.includes('connection')) {
+        return ERROR_MESSAGES['network-error'];
+      }
+      if (message.includes('permission')) {
+        return ERROR_MESSAGES['permission-denied'];
+      }
+    }
+
+    return ERROR_MESSAGES.default;
+  }
+
+  /**
+   * Show error to user with SweetAlert
+   * @param {Error|Object} error - The error object
+   * @param {string} title - Optional custom title
+   * @param {Object} options - Optional SweetAlert options
+   */
+  async function showError(error, title = null, options = {}) {
+    const message = getUserMessage(error);
+    const defaultTitle = title || 'Error';
+
+    return Swal.fire({
+      icon: 'error',
+      title: defaultTitle,
+      text: message,
+      confirmButtonText: 'OK',
+      allowOutsideClick: false,
+      ...options
+    });
+  }
+
+  /**
+   * Show error toast (brief notification)
+   * @param {Error|Object} error - The error object
+   * @param {string} title - Optional custom title
+   */
+  async function showErrorToast(error, title = 'Error') {
+    const message = getUserMessage(error);
+
+    return Swal.fire({
+      icon: 'error',
+      title: title,
+      text: message,
+      toast: true,
+      position: 'top-end',
+      timer: 4000,
+      timerProgressBar: true,
+      showConfirmButton: false
+    });
+  }
+
+  /**
+   * Handle async operation with error management
+   * @param {Function} operation - Async function to execute
+   * @param {string} context - Description of what operation is doing (for logging)
+   * @param {Object} options - { showUI: true, onError: null }
+   * @returns {Promise} Result of operation or null if error
+   */
+  async function handle(operation, context = 'Operation', options = {}) {
+    const { showUI = true, onError = null } = options;
+
+    try {
+      return await operation();
+    } catch (error) {
+      // Log for debugging (production environment should disable this)
+      if (window.DEBUG_MODE) {
+        console.error(`[${context}] Error:`, error);
+      }
+
+      // Call custom error handler if provided
+      if (typeof onError === 'function') {
+        onError(error);
+      }
+
+      // Show user feedback if requested
+      if (showUI) {
+        await showErrorToast(error, context);
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Validate required parameters
+   * @param {Object} params - Object with param names as keys
+   * @param {Array} required - Array of required param names
+   * @throws {Error} If required params are missing
+   */
+  function validateRequired(params, required) {
+    for (const param of required) {
+      if (params[param] === undefined || params[param] === null || params[param] === '') {
+        throw new Error(`Required parameter missing: ${param}`);
+      }
+    }
+  }
+
+  /**
+   * Validate email format
+   * @param {string} email - Email to validate
+   * @returns {boolean}
+   */
+  function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  /**
+   * Validate password strength
+   * @param {string} password - Password to validate
+   * @returns {boolean} True if password is at least 6 characters
+   */
+  function isValidPassword(password) {
+    return password && password.length >= 6;
+  }
+
+  return {
+    getUserMessage,
+    showError,
+    showErrorToast,
+    handle,
+    validateRequired,
+    isValidEmail,
+    isValidPassword
+  };
+})();

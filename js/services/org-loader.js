@@ -1,8 +1,20 @@
 /**
- * Organization Loader Service
- * Handles loading organizations and initializing Firebase instances
+ * DEPRECATED: Organization Loader Service
+ * 
+ * This service has been merged into OrgManager.
+ * Use OrgManager.loadOrganization(slug) instead, which now handles:
+ * - Loading org from Firestore
+ * - Initializing org's Firebase app
+ * - Registering with FirebaseService
+ * 
+ * Kept for reference only. Can be safely removed.
+ * 
+ * Migration:
+ *   OLD: const org = await orgLoader.loadOrganizationFromSlug('slug');
+ *   NEW: const org = await orgManager.loadOrganization('slug');
  */
 
+// DEPRECATED - See OrgManager instead
 class OrgLoader {
   constructor() {
     this.loadedInstances = {};
@@ -18,7 +30,6 @@ class OrgLoader {
 
       return org;
     } catch (error) {
-      console.error(`Failed to load organization: ${slug}`, error);
       throw error;
     }
   }
@@ -56,7 +67,6 @@ class OrgLoader {
       this.orgManager.setOrgFirebaseApp(firebaseApp);
       this.orgManager.setOrgDatabase(database);
     } catch (error) {
-      console.error('Failed to initialize organization Firebase:', error);
       throw error;
     }
   }
@@ -74,7 +84,6 @@ class OrgLoader {
 
       this.orgManager.clearCurrentOrg();
     } catch (error) {
-      console.error(`Failed to disconnect from organization: ${slug}`, error);
       throw error;
     }
   }

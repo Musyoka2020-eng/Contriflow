@@ -1,19 +1,6 @@
 // Reports Manager Module
 // Handles all report generation, display, and export functionality
 
-// Show toast notification
-function showToast(icon, title, text) {
-    Swal.fire({
-        icon: icon,
-        title: title,
-        text: text,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000
-    });
-}
-
 const ReportsManager = (function() {
     let currentReportData = null;
 
@@ -85,71 +72,9 @@ const ReportsManager = (function() {
             }
         },
 
-        // Check if data exists in the selected date range
-        hasDataInRange(reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData) {
-            const startMonth = reportStartMonth.value;
-            const startYear = reportStartYear.value;
-            const endMonth = reportEndMonth.value;
-            const endYear = reportEndYear.value;
-
-            const months = moment.months();
-            const startDate = moment(`${startYear}-${months.indexOf(startMonth) + 1}`, 'YYYY-M');
-            const endDate = moment(`${endYear}-${months.indexOf(endMonth) + 1}`, 'YYYY-M');
-
-            let currentDate = startDate.clone();
-
-            while (currentDate.isSameOrBefore(endDate, 'month')) {
-                const year = currentDate.format('YYYY');
-                const month = currentDate.format('MMMM');
-
-                if (contributionsData[year]?.[month]?.contributions && 
-                    contributionsData[year][month].contributions.length > 0) {
-                    return true;
-                }
-
-                currentDate.add(1, 'month');
-            }
-
-            return false;
-        },
-
-        // Generate report based on type
+        // Generate report based on type (delegates to ReportGenerator)
         generateReport(reportTypeSelect, reportMemberSelect, reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData, statusFilter = 'all') {
-            const reportType = reportTypeSelect.value;
-
-            try {
-                // Check if data exists in the selected range first
-                if (!this.hasDataInRange(reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData)) {
-                    throw new Error(`No data available for the selected date range (${reportStartMonth.value} ${reportStartYear.value} to ${reportEndMonth.value} ${reportEndYear.value})`);
-                }
-
-                let reportData = null;
-
-                switch (reportType) {
-                    case 'individual':
-                        reportData = this.generateIndividualReport(reportMemberSelect, reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData, statusFilter);
-                        break;
-                    case 'all-members':
-                        reportData = this.generateAllMembersReport(reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData);
-                        break;
-                    case 'expected-members':
-                        reportData = this.generateExpectedMembersReport(reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData);
-                        break;
-                    case 'month-range':
-                        reportData = this.generateMonthRangeReport(reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData);
-                        break;
-                    default:
-                        throw new Error('Invalid report type');
-                }
-
-                if (reportData) {
-                    return reportData;
-                }
-            } catch (error) {
-                console.error('Error generating report:', error);
-                showToast('error', 'Report Generation Error', error.message || 'Failed to generate report');
-                return null;
-            }
+            return ReportGenerator.generateReport(reportTypeSelect, reportMemberSelect, reportStartMonth, reportStartYear, reportEndMonth, reportEndYear, contributionsData, statusFilter);
         },
 
         // Generate individual member report
@@ -974,42 +899,9 @@ const ReportsManager = (function() {
             return html;
         },
 
-        // Export report as text
+        // Export report as text (delegates to ReportExporter)
         exportReportAsText() {
-            if (!currentReportData) {
-                showToast('warning', 'No Report', 'Please generate a report first');
-                return;
-            }
-
-            const reportData = currentReportData;
-            let text = `${reportData.title}\n`;
-            text += `${reportData.subtitle}\n`;
-            text += '='.repeat(50) + '\n\n';
-
-            switch (reportData.type) {
-                case 'individual':
-                    text += this.generateIndividualReportText(reportData);
-                    break;
-                case 'all-members':
-                    text += this.generateAllMembersReportText(reportData);
-                    break;
-                case 'expected-members':
-                    text += this.generateExpectedMembersReportText(reportData);
-                    break;
-                case 'month-range':
-                    text += this.generateMonthRangeReportText(reportData);
-                    break;
-            }
-
-            const blob = new Blob([text], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `report_${moment().format('YYYY-MM-DD_HH-mm-ss')}.txt`;
-            link.click();
-            URL.revokeObjectURL(url);
-
-            showToast('success', 'Report Exported', 'Report has been downloaded as text file');
+            ReportExporter.exportAsText(currentReportData);
         },
 
         // Generate text versions of reports
@@ -1129,83 +1021,12 @@ const ReportsManager = (function() {
 
         // Print report
         printReportContent(reportContent) {
-            if (!currentReportData) {
-                showToast('warning', 'No Report', 'Please generate a report first');
-                return;
-            }
-
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html>
-                <head>
-                    <title>Print Report</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; padding: 20px; }
-                        h1 { color: #4a69bd; }
-                        .subtitle { color: #666; margin-bottom: 20px; }
-                        .report-subtitle { font-size: 15px; color: #666; margin-bottom: 16px; padding: 12px 16px; background-color: #f8f9fa; border-left: 4px solid #667eea; border-radius: 4px; }
-                        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                        th { background-color: #4a69bd; color: white; }
-                        .paid { color: green; }
-                        .unpaid { color: red; }
-                        .no-record { color: orange; }
-                        .summary { margin-top: 20px; padding: 15px; background-color: #f5f5f5; }
-                        .report-summary { margin-top: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 8px; }
-                        @media print {
-                            button { display: none; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <h1>${currentReportData.title}</h1>
-                    ${reportContent.innerHTML}
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-            printWindow.print();
+            ReportExporter.print(currentReportData, reportContent);
         },
 
-        // Share report via WhatsApp
+        // Share report via WhatsApp (delegates to ReportExporter)
         shareReportViaWhatsapp(phoneNumber) {
-            if (!currentReportData) {
-                showToast('warning', 'No Report', 'Please generate a report first');
-                return;
-            }
-
-            if (!phoneNumber) {
-                showToast('warning', 'No Phone Number', 'Please save your phone number in the settings first');
-                return;
-            }
-
-            const reportData = currentReportData;
-            let message = `*${reportData.title}*\n`;
-            message += `${reportData.subtitle}\n`;
-            message += '--'.repeat(25) + '\n\n';
-
-            switch (reportData.type) {
-                case 'individual':
-                    message += this.generateIndividualReportText(reportData);
-                    break;
-                case 'all-members':
-                    message += `Total Members: ${reportData.summary.totalMembers}\n`;
-                    message += `Grand Total: ${reportData.summary.grandTotalAmount.toLocaleString()}/=\n`;
-                    message += `Total Paid: ${reportData.summary.grandTotalPaid.toLocaleString()}/=\n`;
-                    message += `Total Unpaid: ${reportData.summary.grandTotalUnpaid.toLocaleString()}/=\n`;
-                    break;
-                case 'expected-members':
-                    message += this.generateExpectedMembersReportText(reportData);
-                    break;
-                case 'month-range':
-                    message += this.generateMonthRangeReportText(reportData);
-                    break;
-            }
-
-            message += '\n_Generated from Contribution Manager_';
-
-            const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-            window.open(whatsappUrl, '_blank');
+            ReportExporter.shareViaWhatsapp(currentReportData, phoneNumber);
         }
     };
 })();

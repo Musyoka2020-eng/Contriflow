@@ -8,10 +8,11 @@ const EventHandlers = (function () {
         blacklistData: { blacklistedMembers: [] },
         currentYear: '',
         currentMonth: '',
-        phoneNumber: '',
-        saveDataCallback: null,
-        updateDisplayCallback: null
+        phoneNumber: ''
     };
+
+    // Injected save callback (kept separate from data state)
+    let _saveCallback = null;
 
     // Helper: Show confirmation dialog
     function showConfirmation(title, text, confirmText = 'Yes', icon = 'warning') {
@@ -47,14 +48,14 @@ const EventHandlers = (function () {
 
     // Helper: Save and update
     function saveAndUpdate() {
-        if (state.saveDataCallback) state.saveDataCallback();
-        if (state.updateDisplayCallback) state.updateDisplayCallback();
+        if (_saveCallback) _saveCallback();
     }
 
     return {
         // Initialize state references
-        init(stateObj) {
+        init(stateObj, saveCallback) {
             state = stateObj;
+            _saveCallback = saveCallback;
         },
 
         // Toggle payment status
@@ -66,8 +67,7 @@ const EventHandlers = (function () {
                 state.currentMonth,
                 index
             );
-            if (state.saveDataCallback) state.saveDataCallback();
-            if (state.updateDisplayCallback) state.updateDisplayCallback();
+            if (_saveCallback) _saveCallback();
         },
 
         // Remove contribution
@@ -104,6 +104,8 @@ const EventHandlers = (function () {
                 if (result.isConfirmed) {
                     if (!state.blacklistData.blacklistedMembers.includes(name)) {
                         state.blacklistData.blacklistedMembers.push(name);
+                        // Reassign to trigger Proxy listener for reactive display update
+                        state.blacklistData = state.blacklistData;
                         saveAndUpdate();
                         showSuccessToast('Member Blacklisted', `${name} has been added to the blacklist.`);
                     } else {
@@ -183,6 +185,8 @@ const EventHandlers = (function () {
             }
 
             state.blacklistData.blacklistedMembers.push(name);
+            // Reassign to trigger Proxy listener for reactive display update
+            state.blacklistData = state.blacklistData;
             saveAndUpdate();
             dom.blacklistNameInput.value = '';
             showSuccessToast('Member Blacklisted', `${name} has been added to the blacklist.`);
@@ -201,6 +205,8 @@ const EventHandlers = (function () {
             ).then((result) => {
                 if (result.isConfirmed) {
                     state.blacklistData.blacklistedMembers.splice(index, 1);
+                    // Reassign to trigger Proxy listener for reactive display update
+                    state.blacklistData = state.blacklistData;
                     saveAndUpdate();
                     showSuccessToast('Member Removed', `${name} has been removed from the blacklist.`);
                 }
@@ -336,39 +342,52 @@ const EventHandlers = (function () {
         },
 
         // Budget Event Handlers
-        setupBudgetEventHandlers() {
-            // Add expense button - use direct DOM query since it's dynamically generated
-            const addExpenseBtn = document.getElementById('add-expense-btn');
-            
-            if (addExpenseBtn) {
-                // Clone to remove all old listeners
-                const newBtn = addExpenseBtn.cloneNode(true);
-                addExpenseBtn.parentNode.replaceChild(newBtn, addExpenseBtn);
+        refreshBudgetTable() {
+            const budgetDom = { budgetContent: document.getElementById('budget-content') };
+            const totalIncome = BudgetManager.calculateBudgetFromIncome(state.contributionsData || {});
+            BudgetManager.renderBudgetUI(budgetDom, state.budgetData, totalIncome);
 
-                newBtn.addEventListener('click', async () => {
+            // Add expense button - re-attach after every render since the form markup is fully regenerated
+            const addExpenseBtn = document.getElementById('add-expense-btn');
+            if (addExpenseBtn) {
+                const newAddBtn = addExpenseBtn.cloneNode(true);
+                addExpenseBtn.parentNode.replaceChild(newAddBtn, addExpenseBtn);
+
+                newAddBtn.addEventListener('click', async () => {
                     const amountInput = document.getElementById('expense-amount');
                     const categorySelect = document.getElementById('expense-category');
                     const dateInput = document.getElementById('expense-date');
                     const descriptionInput = document.getElementById('expense-description');
 
+                    // Clear previous field errors
+                    [amountInput, categorySelect, dateInput].forEach(el => {
+                        el.classList.remove('input-error');
+                        const existing = el.parentElement.querySelector('.field-error');
+                        if (existing) existing.remove();
+                    });
+
                     const amount = parseFloat(amountInput.value);
                     const category = categorySelect.value;
                     const date = dateInput.value;
+                    let isValid = true;
 
-                    if (isNaN(amount) || amount <= 0) {
-                        showError('Invalid Amount', 'Please enter a valid expense amount');
-                        return;
-                    }
+                    const markFieldError = (input, message) => {
+                        input.classList.add('input-error');
+                        const errorSpan = document.createElement('span');
+                        errorSpan.className = 'field-error';
+                        errorSpan.textContent = message;
+                        input.parentElement.appendChild(errorSpan);
+                        isValid = false;
+                    };
 
-                    if (!category) {
-                        showError('Missing Category', 'Please select an expense category');
-                        return;
-                    }
+                    if (isNaN(amount) || amount <= 0) markFieldError(amountInput, 'Enter an amount greater than 0');
+                    if (!category) markFieldError(categorySelect, 'Please select a category');
+                    if (!date) markFieldError(dateInput, 'Please select a date');
 
-                    if (!date) {
-                        showError('Missing Date', 'Please select an expense date');
-                        return;
-                    }
+                    if (!isValid) return;
+
+                    newAddBtn.disabled = true;
+                    newAddBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
 
                     try {
                         const expenseId = await BudgetManager.addExpense(
@@ -381,37 +400,31 @@ const EventHandlers = (function () {
 
                         if (expenseId) {
                             showSuccessToast('Expense Added', `Added ${amount.toLocaleString()} to ${category}`);
-
-                            // Clear inputs
                             amountInput.value = '';
                             descriptionInput.value = '';
                             categorySelect.value = '';
-                            dateInput.value = '';
-
-                            // Trigger save
-                            state.saveDataCallback();
-                            
-                            // Re-render the budget UI
-                            const budgetDom = { budgetContent: document.getElementById('budget-content') };
-                            const totalIncome = BudgetManager.calculateBudgetFromIncome(state.contributionsData || {});
-                            BudgetManager.renderBudgetUI(budgetDom, state.budgetData, totalIncome);
-                            this.setupBudgetEventHandlers(); // Re-attach event listeners
+                            _saveCallback();
+                            this.refreshBudgetTable();
+                        } else {
+                            newAddBtn.disabled = false;
+                            newAddBtn.innerHTML = '<i class="fas fa-plus"></i> Add Expense';
+                            showError('Add Failed', 'Could not add expense. Please try again.');
                         }
                     } catch (error) {
-                        console.error('Error adding expense:', error);
-                        showError('Add Failed', 'Failed to add expense');
+                        newAddBtn.disabled = false;
+                        newAddBtn.innerHTML = '<i class="fas fa-plus"></i> Add Expense';
+                        showError('Add Failed', 'An unexpected error occurred. Please try again.');
                     }
                 });
             }
 
-            // Set today's date as default in date input
-            const dateInput = document.getElementById('expense-date');
-            if (dateInput) {
-                const today = moment().format('YYYY-MM-DD');
-                dateInput.value = today;
+            // Set today\'s date as default (form is fully re-rendered on each call)
+            const expenseDateInput = document.getElementById('expense-date');
+            if (expenseDateInput) {
+                expenseDateInput.value = moment().format('YYYY-MM-DD');
             }
 
-            // Delete expense buttons - clone to remove old listeners
+            // Delete expense buttons - clone to remove stale listeners
             document.querySelectorAll('.delete-expense').forEach(btn => {
                 const newBtn = btn.cloneNode(true);
                 btn.parentNode.replaceChild(newBtn, btn);
@@ -430,25 +443,17 @@ const EventHandlers = (function () {
                             const success = await BudgetManager.removeExpense(state.budgetData, expenseId);
                             if (success) {
                                 showSuccessToast('Expense Deleted');
-
-                                // Trigger save
-                                state.saveDataCallback();
-
-                                // Re-render the budget UI
-                                const budgetDom = { budgetContent: document.getElementById('budget-content') };
-                                const totalIncome = BudgetManager.calculateBudgetFromIncome(state.contributionsData || {});
-                                BudgetManager.renderBudgetUI(budgetDom, state.budgetData, totalIncome);
-                                this.setupBudgetEventHandlers(); // Re-attach event listeners
+                                _saveCallback();
+                                this.refreshBudgetTable();
                             }
                         } catch (error) {
-                            console.error('Error deleting expense:', error);
                             showError('Delete Failed', 'Failed to delete expense');
                         }
                     }
                 });
             });
 
-            // Edit expense buttons - clone to remove old listeners
+            // Edit expense buttons - clone to remove stale listeners
             document.querySelectorAll('.edit-expense').forEach(btn => {
                 const newBtn = btn.cloneNode(true);
                 btn.parentNode.replaceChild(newBtn, btn);
@@ -464,7 +469,6 @@ const EventHandlers = (function () {
 
                     const expenseDate = moment(expense.date).format('YYYY-MM-DD');
 
-                    // Show edit modal/dialog
                     const { value: formValues } = await Swal.fire({
                         title: 'Edit Expense',
                         width: '500px',
@@ -504,7 +508,6 @@ const EventHandlers = (function () {
                             </form>
                         `,
                         didOpen: (modal) => {
-                            // Focus first input
                             modal.querySelector('#edit-amount').focus();
                         },
                         showCancelButton: true,
@@ -540,23 +543,20 @@ const EventHandlers = (function () {
 
                             if (success) {
                                 showSuccessToast('Expense Updated');
-
-                                // Trigger save
-                                state.saveDataCallback();
-
-                                // Re-render the budget UI
-                                const budgetDom = { budgetContent: document.getElementById('budget-content') };
-                                const totalIncome = BudgetManager.calculateBudgetFromIncome(state.contributionsData || {});
-                                BudgetManager.renderBudgetUI(budgetDom, state.budgetData, totalIncome);
-                                this.setupBudgetEventHandlers(); // Re-attach event listeners
+                                _saveCallback();
+                                this.refreshBudgetTable();
                             }
                         } catch (error) {
-                            console.error('Error updating expense:', error);
                             showError('Update Failed', 'Failed to update expense');
                         }
                     }
                 });
             });
+        },
+
+        setupBudgetEventHandlers() {
+            // Render the budget UI and attach all listeners (add, edit, delete) via refreshBudgetTable
+            this.refreshBudgetTable();
         },
 
         // Setup special giving event handlers
@@ -747,7 +747,7 @@ const EventHandlers = (function () {
                             showSuccessToast('Thank You!', `Pledge of ${Number(pledgedAmount).toLocaleString()} recorded`);
 
                             // Trigger save
-                            state.saveDataCallback();
+                            _saveCallback();
 
                             // Re-render
                             const campaigns = SpecialGivingManager.getAllCampaigns(state.campaignsData);
@@ -755,7 +755,6 @@ const EventHandlers = (function () {
                             this.setupSpecialGivingEventHandlers();
                         }
                     } catch (error) {
-                        console.error('Error adding contribution:', error);
                         showError('Contribution Failed', 'Failed to process your contribution');
                     }
                 });
@@ -990,7 +989,7 @@ const EventHandlers = (function () {
                                                 showSuccessToast('Updated', 'Contribution has been updated successfully');
 
                                                 // Trigger save
-                                                state.saveDataCallback();
+                                                _saveCallback();
 
                                                 // Refresh modal
                                                 const updatedCampaign = SpecialGivingManager.getCampaignById(state.campaignsData, campaignId);
@@ -1009,7 +1008,6 @@ const EventHandlers = (function () {
                                                 EventHandlers.setupSpecialGivingEventHandlers();
                                             }
                                         } catch (error) {
-                                            console.error('Error updating contribution:', error);
                                             showError('Update Failed', 'Failed to update contribution');
                                         }
                                     });
@@ -1071,7 +1069,7 @@ const EventHandlers = (function () {
                                                 showSuccessToast('Payment Recorded', `${paymentAmount} recorded for ${contribution.contributorName}`);
 
                                                 // Trigger save
-                                                state.saveDataCallback();
+                                                _saveCallback();
 
                                                 // Update modal
                                                 const updatedCampaign = SpecialGivingManager.getCampaignById(state.campaignsData, campaignId);
@@ -1090,7 +1088,6 @@ const EventHandlers = (function () {
                                                 EventHandlers.setupSpecialGivingEventHandlers();
                                             }
                                         } catch (error) {
-                                            console.error('Error recording payment:', error);
                                             showError('Payment Failed', 'Failed to record payment');
                                         }
                                     });
@@ -1127,7 +1124,7 @@ const EventHandlers = (function () {
                                                     showSuccessToast('Deleted', 'Contribution has been removed');
 
                                                     // Trigger save
-                                                    state.saveDataCallback();
+                                                    _saveCallback();
 
                                                     // Update modal
                                                     const updatedCampaign = SpecialGivingManager.getCampaignById(state.campaignsData, campaignId);
@@ -1152,7 +1149,6 @@ const EventHandlers = (function () {
                                                     EventHandlers.setupSpecialGivingEventHandlers();
                                                 }
                                             } catch (error) {
-                                                console.error('Error deleting contribution:', error);
                                                 showError('Delete Failed', 'Failed to delete contribution');
                                             }
                                         }
@@ -1216,7 +1212,6 @@ const EventHandlers = (function () {
                                 showSuccessToast('Success', `Spreadsheet queued for download (${(result.size / 1024).toFixed(2)} KB)`);
                                 setTimeout(() => Swal.close(), 3500);
                             } catch (error) {
-                                console.error('CSV export failed:', error);
                                 showError('Export Error', error.message);
                             }
                         }, { once: true });
@@ -1229,7 +1224,6 @@ const EventHandlers = (function () {
                                 showSuccessToast('Success', `Text file queued for download (${(result.size / 1024).toFixed(2)} KB)`);
                                 setTimeout(() => Swal.close(), 3500);
                             } catch (error) {
-                                console.error('Text export failed:', error);
                                 showError('Export Error', error.message);
                             }
                         }, { once: true });
@@ -1242,7 +1236,6 @@ const EventHandlers = (function () {
                                 showSuccessToast('Success', `PDF queued for download (~${result.size} bytes)`);
                                 setTimeout(() => Swal.close(), 3500);
                             } catch (error) {
-                                console.error('PDF export failed:', error);
                                 showError('Export Error', error.message);
                             }
                         }, { once: true });
@@ -1363,14 +1356,13 @@ const EventHandlers = (function () {
                             showSuccessToast('Campaign Updated', 'Your campaign has been updated successfully');
 
                             // Trigger save
-                            state.saveDataCallback();
+                            _saveCallback();
 
                             // Re-render
                             const campaigns = SpecialGivingManager.getAllCampaigns(state.campaignsData);
                             UIRenderer.renderSpecialGivingView(campaigns);
                             this.setupSpecialGivingEventHandlers();
                         } catch (error) {
-                            console.error('Error updating campaign:', error);
                             showError('Update Failed', 'Failed to update campaign');
                         }
                     }
@@ -1405,14 +1397,13 @@ const EventHandlers = (function () {
                             showSuccessToast('Campaign Deleted', 'Campaign has been deleted successfully');
 
                             // Trigger save
-                            state.saveDataCallback();
+                            _saveCallback();
 
                             // Re-render
                             const campaigns = SpecialGivingManager.getAllCampaigns(state.campaignsData);
                             UIRenderer.renderSpecialGivingView(campaigns);
                             this.setupSpecialGivingEventHandlers();
                         } catch (error) {
-                            console.error('Error deleting campaign:', error);
                             showError('Delete Failed', 'Failed to delete campaign');
                         }
                     }

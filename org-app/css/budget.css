@@ -638,6 +638,24 @@ header .btn {
     color: #ddd;
 }
 
+/* Expense form: field-level validation */
+.field-error {
+    display: block;
+    color: var(--accent-red);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.input-error {
+    border-color: var(--accent-red) !important;
+    box-shadow: 0 0 0 2px rgba(255, 107, 122, 0.2) !important;
+}
+
+#add-expense-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 .no-expenses-message p {
     font-size: 16px;
     color: #666;

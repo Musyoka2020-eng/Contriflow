@@ -1,18 +1,23 @@
+import FirebaseService from './firebase-service.js';
+
 /**
  * Super Admin Service
  * Handles organization creation and management
- * Uses Firestore for central database
+ * Depends on FirebaseService for central database operations
+ * 
+ * TODO: Integrate with actual app initialization code to provide Firebase instances
+ * Services currently use dependency injection but are instantiated without parameters
  */
 
 class SuperAdminService {
-  constructor() {
-    this.centralFirestore = null;
-    this.centralAuth = null;
+  constructor(firebaseService = null) {
+    // Dependency injection with default
+    this.firebaseService = firebaseService || FirebaseService.getInstance();
   }
 
-  async initialize(centralFirestore, centralAuth) {
-    this.centralFirestore = centralFirestore;
-    this.centralAuth = centralAuth;
+  async initialize() {
+    // FirebaseService initialization is handled independently
+    return true;
   }
 
   async createOrganization(orgName, firebaseConfig, adminEmail, adminPassword) {
@@ -24,11 +29,10 @@ class SuperAdminService {
       const slug = this.generateSlug(orgName);
       const orgId = this.generateId();
 
-      // Check if slug exists in Firestore
-      const orgRef = firebase.firestore().collection('organizations').doc(slug);
-      const existingOrg = await orgRef.get();
+      // Check if slug exists in Firestore using FirebaseService
+      const existingOrgResult = await this.firebaseService.centralGet('organizations', slug);
 
-      if (existingOrg.exists) {
+      if (existingOrgResult.exists) {
         throw new Error(`Organization slug already exists: ${slug}`);
       }
 
@@ -67,7 +71,7 @@ class SuperAdminService {
         createdAt: firebase.database.ServerValue.TIMESTAMP
       });
 
-      // Create organization metadata in central Firestore
+      // Create organization metadata in central Firestore using FirebaseService
       const orgData = {
         id: orgId,
         name: orgName,
@@ -77,7 +81,7 @@ class SuperAdminService {
         createdAt: new Date().toISOString()
       };
 
-      await this.centralFirestore.collection('organizations').doc(slug).set(orgData);
+      await this.firebaseService.centralSet('organizations', slug, orgData);
 
       // Clean up temporary Firebase instance
       await firebase.app(orgAppName).delete();
@@ -90,27 +94,17 @@ class SuperAdminService {
         }
       };
     } catch (error) {
-      console.error('Failed to create organization:', error);
       throw error;
     }
   }
 
   async getAllOrganizations() {
     try {
-      const db = this.centralFirestore;
-      const querySnapshot = await db.collection('organizations').get();
-
-      const organizations = [];
-      querySnapshot.forEach((doc) => {
-        organizations.push({
-          slug: doc.id,
-          ...doc.data()
-        });
-      });
-
+      // Get all organizations from central Firestore using FirebaseService
+      const organizations = await this.firebaseService.centralGetAll('organizations');
+      
       return organizations;
     } catch (error) {
-      console.error('Failed to fetch organizations:', error);
       throw error;
     }
   }
@@ -121,14 +115,12 @@ class SuperAdminService {
         throw new Error('Organization slug is required');
       }
 
-      const db = this.centralFirestore;
-      
-      // If status is 'deleted', completely remove from Firestore
+      // If status is 'deleted', completely remove from Firestore using FirebaseService
       if (status === 'deleted') {
-        await db.collection('organizations').doc(slug).delete();
+        await this.firebaseService.centralDelete('organizations', slug);
       } else {
-        // For other statuses, just update the status field
-        await db.collection('organizations').doc(slug).update({
+        // For other statuses, just update the status field using FirebaseService
+        await this.firebaseService.centralUpdate('organizations', slug, {
           status: status,
           updatedAt: new Date().toISOString()
         });
@@ -136,7 +128,6 @@ class SuperAdminService {
 
       return { slug, status };
     } catch (error) {
-      console.error(`Failed to update organization status: ${slug}`, error);
       throw error;
     }
   }
@@ -147,18 +138,15 @@ class SuperAdminService {
         throw new Error('Organization slug is required');
       }
 
-      const db = this.centralFirestore;
-      
-      // Update organization fields in Firestore
+      // Update organization fields in Firestore using FirebaseService
       const updateData = {
         ...updates,
         updatedAt: new Date().toISOString()
       };
 
-      await db.collection('organizations').doc(slug).update(updateData);
+      await this.firebaseService.centralUpdate('organizations', slug, updateData);
       return { slug, ...updates };
     } catch (error) {
-      console.error(`Failed to update organization: ${slug}`, error);
       throw error;
     }
   }
@@ -186,3 +174,5 @@ class SuperAdminService {
 }
 
 const superAdminService = SuperAdminService.getInstance();
+
+export default SuperAdminService;

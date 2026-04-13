@@ -28,6 +28,7 @@ build/
 # ==========================
 .env
 .env.local
+config-generated.js
 
 # ==========================
 # Documentation (Internal Only)
@@ -107,5 +108,6 @@ Desktop.ini
  #==========================
  SECURITY_ANALYSIS.md
  SYSTEM_ARCHITECTURE.md
+REFACTORING_GUIDE.md
 .vercel
 .env*.local
