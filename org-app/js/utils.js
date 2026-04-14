@@ -17,7 +17,7 @@ function showToast(icon, title, text) {
 const Utils = (function() {
     return {
         // Sanitize HTML to prevent XSS
-        escapeHTML(text) {
+        sanitizeHTML(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
