@@ -8,7 +8,6 @@
 *~
 *.sublime-project
 *.sublime-workspace
-.DS_Store
 Thumbs.db
 
 # ==========================
@@ -20,8 +19,6 @@ npm-debug.log.*
 yarn-error.log
 package-lock.json
 yarn.lock
-dist/
-build/
 
 # ==========================
 # Environment Files
@@ -47,7 +44,6 @@ SYSTEM_ARCHITECTURE.md
 .c9/
 *.launch
 .settings/
-*.sublime-workspace
 
 # ==========================
 # OS Generated Files
@@ -62,7 +58,6 @@ SYSTEM_ARCHITECTURE.md
 *.bak
 *.backup
 *.tmp
-*~
 
 # ==========================
 # Firebase Files
@@ -103,11 +98,9 @@ Desktop.ini
 !.gitkeep
 !config-central.js
 !pages/superadmin/setup.html
- #==========================
- # MD Files
- #==========================
- SECURITY_ANALYSIS.md
- SYSTEM_ARCHITECTURE.md
+#==========================
+# MD Files
+#==========================
 REFACTORING_GUIDE.md
 .vercel
 .env*.local

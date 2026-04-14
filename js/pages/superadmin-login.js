@@ -24,12 +24,11 @@ class SuperAdminLoginPage {
 
   async checkSetupRequired() {
     try {
-      const superAdminUsers = await this.firebaseService.centralGetAll('superadminUsers');
-      console.log('Setup check - superadminUsers collection has documents:', superAdminUsers.length > 0);
+      const setupStatus = await this.firebaseService.centralGet('systemConfig', 'setup');
       
-      if (!superAdminUsers || superAdminUsers.length === 0) {
-        // No super admins exist, setup is required
-        console.log('Redirecting to setup page - no admins found');
+      if (!setupStatus || !setupStatus.setupComplete) {
+        // Setup has not been completed yet
+        console.log('Redirecting to setup page - setup not complete');
         this.redirectToSetup('No admin accounts exist yet');
         return; // Exit early
       }

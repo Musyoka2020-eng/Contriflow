@@ -29,10 +29,20 @@
       ".read": "auth != null",
       "$uid": {
         ".read": "auth != null",
-        ".write": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        ".write": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        "role": {
+          ".write": "root.child('users').child(auth.uid).child('role').val() === 'admin'",
+          ".validate": "newData.val() === 'user' || newData.val() === 'admin'"
+        }
       }
     },
-    "meta": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },    "meta": {
       ".read": "auth != null",
       ".write": "auth != null"
     }

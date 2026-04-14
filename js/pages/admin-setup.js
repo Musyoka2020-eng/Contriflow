@@ -34,15 +34,14 @@ class AdminSetupPage {
 
   async checkIfSetupNeeded() {
     try {
-      const superAdminUsers = await this.firebaseService.centralGetAll('superadminUsers');
-      console.log('Admin setup check - superadminUsers collection has documents:', superAdminUsers.length > 0);
-      const setupNeeded = superAdminUsers.length === 0;
+      const setupStatus = await this.firebaseService.centralGet('systemConfig', 'setup');
+      const setupNeeded = !setupStatus || !setupStatus.setupComplete;
       console.log('Setup needed:', setupNeeded);
       return setupNeeded;
     } catch (error) {
       console.error('Failed to check setup status:', error);
       
-      // If permission error, assume setup is needed (no rules for unauthenticated access yet)
+      // If permission error, assume setup is needed
       if (error.code === 'permission-denied') {
         console.warn('Permission denied - assuming setup is needed');
         return true;
@@ -110,6 +109,12 @@ class AdminSetupPage {
         email: email,
         role: 'superadmin',
         createdAt: new Date().toISOString()
+      });
+
+      // Mark setup as complete in public systemConfig document
+      await this.firebaseService.centralSet('systemConfig', 'setup', {
+        setupComplete: true,
+        completedAt: new Date().toISOString()
       });
 
       console.log('Super admin account created:', email);

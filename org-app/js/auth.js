@@ -424,10 +424,9 @@ async function loadUserList() {
         return;
     }
 
-    if (!result || Object.keys(result).length === 0) {
+    if (Object.keys(result).length === 0) {
         userListElement.innerHTML = '<p>No users found</p>';
-        return;
-    }
+        return;    }
 
     let userTable = `
         <table class="admin-table">

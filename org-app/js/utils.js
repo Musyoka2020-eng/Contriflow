@@ -17,12 +17,11 @@ function showToast(icon, title, text) {
 const Utils = (function() {
     return {
         // Sanitize HTML to prevent XSS
-        sanitizeHTML(text) {
+        escapeHTML(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         },
-
         // Validate name input
         validateName(name) {
             const trimmedName = String(name).trim();
@@ -49,6 +48,11 @@ const Utils = (function() {
         // Export data to JSON files
         exportData(blacklistData, contributionsData, currentYear) {
             try {
+                if (!contributionsData || !contributionsData[currentYear]) {
+                    showToast('error', 'Export Error', `No data found for year ${currentYear}.`);
+                    return;
+                }
+
                 const blacklistBlob = new Blob([JSON.stringify(blacklistData, null, 2)], {
                     type: 'application/json'
                 });
@@ -79,7 +83,6 @@ const Utils = (function() {
                 showToast('error', 'Export Error', 'Failed to export data files.');
             }
         },
-
         // Save phone number to localStorage
         savePhoneNumber(phoneNumber) {
             if (!phoneNumber) {

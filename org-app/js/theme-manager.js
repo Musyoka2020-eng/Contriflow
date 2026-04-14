@@ -47,12 +47,16 @@ const ThemeManager = (function() {
         if (toggleBtn) {
             const icon = toggleBtn.querySelector('i');
             if (theme === DARK_THEME) {
-                icon.classList.remove('fa-moon');
-                icon.classList.add('fa-sun');
+                if (icon) {
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                }
                 toggleBtn.setAttribute('title', 'Switch to light mode');
             } else {
-                icon.classList.remove('fa-sun');
-                icon.classList.add('fa-moon');
+                if (icon) {
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                }
                 toggleBtn.setAttribute('title', 'Switch to dark mode');
             }
         }

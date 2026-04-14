@@ -82,22 +82,7 @@ const FirebaseManager = (function() {
                 const campaignsData = campaignsSnapshot.val() || {};
                 lastSyncTime = lastSyncSnapshot.val() || null;
 
-                // CRITICAL: Clear localStorage cache completely before setting new data
-                // This ensures old stale data doesn't persist when Firebase is empty
-                localStorage.removeItem('contributionsData');
-                localStorage.removeItem('blacklistData');
-                localStorage.removeItem('budgetData');
-                localStorage.removeItem('campaignsData');
-                localStorage.removeItem('lastSyncTime');
-                localStorage.removeItem('lastCache');
-                localStorage.removeItem('lastBackup');
-
-                // Now populate localStorage with fresh Firebase data
-                localStorage.setItem('contributionsData', JSON.stringify(contributionsData));
-                localStorage.setItem('blacklistData', JSON.stringify(blacklistData));
-                localStorage.setItem('budgetData', JSON.stringify(budgetData));
-                localStorage.setItem('campaignsData', JSON.stringify(campaignsData));
-                localStorage.setItem('lastSyncTime', lastSyncTime);
+                // Prepare cache payload first
                 const cachePayload = {
                     contributionsData,
                     blacklistData,
@@ -105,8 +90,38 @@ const FirebaseManager = (function() {
                     campaignsData,
                     timestamp: new Date().toISOString()
                 };
-                localStorage.setItem('lastCache', JSON.stringify(cachePayload));
 
+                try {
+                    // Test that all data can be stringified before clearing
+                    const testStringify = [
+                        JSON.stringify(contributionsData),
+                        JSON.stringify(blacklistData),
+                        JSON.stringify(budgetData),
+                        JSON.stringify(campaignsData),
+                        JSON.stringify(cachePayload)
+                    ];
+
+                    // CRITICAL: Clear localStorage cache completely before setting new data
+                    // This ensures old stale data doesn't persist when Firebase is empty
+                    localStorage.removeItem('contributionsData');
+                    localStorage.removeItem('blacklistData');
+                    localStorage.removeItem('budgetData');
+                    localStorage.removeItem('campaignsData');
+                    localStorage.removeItem('lastSyncTime');
+                    localStorage.removeItem('lastCache');
+                    localStorage.removeItem('lastBackup');
+
+                    // Now populate localStorage with fresh Firebase data
+                    localStorage.setItem('contributionsData', testStringify[0]);
+                    localStorage.setItem('blacklistData', testStringify[1]);
+                    localStorage.setItem('budgetData', testStringify[2]);
+                    localStorage.setItem('campaignsData', testStringify[3]);
+                    localStorage.setItem('lastSyncTime', lastSyncTime);
+                    localStorage.setItem('lastCache', testStringify[4]);
+                } catch (storageError) {
+                    console.error('localStorage operation failed:', storageError);
+                    throw new Error('Failed to cache data locally: ' + storageError.message);
+                }
                 Swal.close();
                 return { contributionsData, blacklistData, budgetData, campaignsData, lastSyncTime };
             } catch (error) {
